@@ -139,8 +139,52 @@ named business features).
 
 ## Inference service
 
-*(Day 6 — FastAPI service with p50/p95 latency logging and a latency histogram will be
-documented here once built.)*
+A FastAPI service (`src/serving/app.py`) loads the persisted production pipeline — the
+class-weighted XGBoost model at its cost-optimized threshold (0.08) — and exposes:
+
+| Endpoint | Description |
+|---|---|
+| `GET /health` | liveness + current decision threshold |
+| `POST /predict` | score a single transaction |
+| `POST /replay?n=&delay_ms=` | replay `n` real test-set rows with a small delay, scoring each |
+| `GET /latency` | p50/p95 over every prediction served so far |
+
+Latency, measured from 5,000 real served predictions (replay + individual calls):
+
+![Inference latency histogram](reports/figures/latency_histogram.png)
+
+**p50: 1.42ms, p95: 2.14ms** — comfortably low-latency for a synchronous scoring call.
+
+```bash
+uvicorn src.serving.app:app --reload
+curl -X POST localhost:8000/predict -H "Content-Type: application/json" -d '{"Time": 0, "V1": ..., "Amount": 149.62}'
+curl -X POST "localhost:8000/replay?n=500&delay_ms=1"
+curl localhost:8000/latency
+```
+
+### Streaming stretch goal: Kafka → FastAPI → Redis sliding window
+
+`docker-compose.yml` also brings up a full streaming demo: a producer replays test-set
+transactions onto a Redpanda (Kafka-API-compatible) topic with a small delay; a consumer reads
+that stream, maintains a Redis-backed sliding-window feature (rolling transaction count and
+amount sum over the last 30 seconds — global rather than per-card, since this dataset has no
+card/merchant ID to key on), scores each transaction against the live FastAPI service, and logs
+the result. Verified end-to-end via `docker compose up`:
+
+```
+amount=$892.16 fraud_probability=0.1286 is_fraud=True window[30s]: count=148 sum=$24602.63
+```
+
+**Honest scope note:** the Redis sliding-window aggregate is genuinely computed and logged
+end-to-end, but it isn't yet wired back into the model as a trained input — that would mean
+retraining on a feature that doesn't exist in the static offline dataset used here. It
+demonstrates the full mechanism the architecture calls for; feeding it into the model is exactly
+the kind of thing the "what I'd do with more data" section below gestures at.
+
+```bash
+docker compose up --build
+```
+
 
 ## Repository structure
 
@@ -179,6 +223,7 @@ python -m src.models.train_autoencoder
 python -m src.models.imbalance_comparison
 python -m src.models.run_cost_analysis
 python -m src.models.run_shap_analysis
+python -m src.models.train_production_model
 
 pytest tests/ -q
 ```

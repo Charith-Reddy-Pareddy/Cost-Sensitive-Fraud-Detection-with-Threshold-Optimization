@@ -14,7 +14,7 @@ false-positive tradeoff as the cost ratio changes?
       threshold curve, cost-ratio sensitivity sweep.
 - [x] **Day 5 — Evaluation + interpretability.** Precision/recall/F1, PR-AUC/ROC-AUC, confusion matrix,
       precision@K, SHAP over the PCA components, main README assembled.
-- [ ] **Day 6 — Inference service + streaming stretch.** FastAPI service with p50/p95 latency logging,
+- [x] **Day 6 — Inference service + streaming stretch.** FastAPI service with p50/p95 latency logging,
       Docker, Kafka/Redpanda → Redis sliding-window feature stretch goal (only kept if it fully works).
 - [ ] **Day 7 — Controlled debugging exercise.** Three defects intentionally introduced and documented,
       reproduced via failing tests, diagnosed, fixed, regression-tested, full suite green.
