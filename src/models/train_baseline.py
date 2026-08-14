@@ -75,7 +75,12 @@ def train_and_log(name: str, pipeline: Pipeline, X_train, y_train, X_test, y_tes
 
         metrics = evaluate(pipeline, X_test, y_test)
         mlflow.log_metrics(metrics)
-        mlflow.sklearn.log_model(pipeline, artifact_path="model")
+        # cloudpickle, not the skops default: skops flags XGBoost's own classes as an
+        # untrusted type on deserialization, which breaks logging an XGBoost-based pipeline.
+        # These are artifacts we train and load ourselves locally, not third-party models.
+        mlflow.sklearn.log_model(
+            pipeline, artifact_path="model", serialization_format="cloudpickle"
+        )
 
         ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
         joblib.dump(pipeline, ARTIFACTS_DIR / f"{name}.joblib")
