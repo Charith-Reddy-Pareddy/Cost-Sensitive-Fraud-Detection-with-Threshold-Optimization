@@ -1,7 +1,7 @@
 pandas
 numpy
 scikit-learn
-xgboost
+xgboost<3.0  # shap 0.49.1's TreeExplainer can't parse xgboost 3.x's base_score serialization format
 imbalanced-learn
 torch
 shap
