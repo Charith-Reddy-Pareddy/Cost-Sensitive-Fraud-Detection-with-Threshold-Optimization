@@ -1,0 +1,10 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY requirements-streaming.txt .
+RUN pip install --no-cache-dir -r requirements-streaming.txt
+
+COPY src/streaming/ src/streaming/
+COPY src/__init__.py src/__init__.py
+COPY data/processed/test.parquet data/processed/test.parquet

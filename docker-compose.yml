@@ -1,0 +1,63 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:latest
+    command:
+      - redpanda
+      - start
+      - --smp=1
+      - --memory=512M
+      - --overprovisioned
+      - --node-id=0
+      - --check=false
+      - --kafka-addr=PLAINTEXT://0.0.0.0:9092
+      - --advertise-kafka-addr=PLAINTEXT://redpanda:9092
+    ports:
+      - "9092:9092"
+
+  producer:
+    build:
+      context: .
+      dockerfile: Dockerfile.streaming
+    command: ["python", "-m", "src.streaming.producer"]
+    environment:
+      - PYTHONUNBUFFERED=1
+      - KAFKA_BROKER=redpanda:9092
+      - PRODUCER_N=300
+      - PRODUCER_DELAY_SECONDS=0.2
+    depends_on:
+      - redpanda
+
+  consumer:
+    build:
+      context: .
+      dockerfile: Dockerfile.streaming
+    command: ["python", "-m", "src.streaming.consumer"]
+    environment:
+      - PYTHONUNBUFFERED=1
+      - KAFKA_BROKER=redpanda:9092
+      - REDIS_HOST=redis
+      - API_URL=http://api:8000
+    depends_on:
+      api:
+        condition: service_healthy
+      redpanda:
+        condition: service_started
+      redis:
+        condition: service_started
