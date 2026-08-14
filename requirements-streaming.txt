@@ -1,0 +1,5 @@
+pandas
+pyarrow
+confluent-kafka
+redis
+httpx
