@@ -91,3 +91,8 @@ def replay(n: int = 100, delay_ms: float = 5.0, seed: Optional[int] = None):
 @app.get("/latency")
 def latency_stats():
     return latency_tracker.percentiles()
+
+
+@app.get("/latency/raw")
+def latency_raw():
+    return {"samples_ms": latency_tracker.snapshot()}
