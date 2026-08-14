@@ -18,6 +18,7 @@ from sklearn.pipeline import Pipeline
 from xgboost import XGBClassifier
 
 from src.features.pipeline import RAW_FEATURE_COLUMNS, TARGET_COLUMN, build_preprocessor
+from src.mlflow_utils import use_local_tracking_store
 
 PROCESSED_DIR = Path(__file__).resolve().parents[2] / "data" / "processed"
 ARTIFACTS_DIR = Path(__file__).resolve().parents[2] / "models" / "artifacts"
@@ -90,6 +91,7 @@ def train_and_log(name: str, pipeline: Pipeline, X_train, y_train, X_test, y_tes
 
 
 def main() -> None:
+    use_local_tracking_store()
     mlflow.set_experiment("fraud-detection-baselines")
 
     X_train, y_train = _load_split("train")

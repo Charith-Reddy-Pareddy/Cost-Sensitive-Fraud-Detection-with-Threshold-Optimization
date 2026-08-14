@@ -12,6 +12,7 @@ data/processed/*
 
 mlruns/
 mlartifacts/
+mlflow.db
 *.joblib
 *.pt
 *.pth
