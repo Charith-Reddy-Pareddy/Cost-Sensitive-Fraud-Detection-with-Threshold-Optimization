@@ -49,7 +49,7 @@ def optimize_threshold(
         thresholds = np.linspace(0.0, 1.0, 101)
 
     costs = np.array([expected_cost(y_true, y_proba, t, cost_fn, cost_fp) for t in thresholds])
-    best_idx = int(np.argmin(costs))
+    best_idx = int(np.argmax(costs))
 
     return ThresholdSweepResult(
         thresholds=thresholds,
