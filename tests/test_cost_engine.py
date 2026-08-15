@@ -31,6 +31,23 @@ def test_optimize_threshold_beats_or_matches_default():
     assert 0.0 <= sweep.optimal_threshold <= 1.0
 
 
+def test_optimize_threshold_picks_the_minimum_not_the_maximum():
+    """Direct, deterministic pin for the argmin/argmax regression: a hand-crafted cost curve
+    with an unambiguous minimum away from both ends, so a min<->max mixup fails immediately
+    and obviously rather than depending on random data happening to expose it."""
+    y_true = np.array([1, 1, 1, 0, 0, 0, 0, 0, 0, 0])
+    y_proba = np.array([0.6, 0.6, 0.6, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4])
+    thresholds = np.array([0.0, 0.5, 1.0])
+
+    # threshold=0.0 -> everyone flagged -> 7 FP, cost 70
+    # threshold=1.0 -> no one flagged -> 3 FN, cost 30
+    # threshold=0.5 -> perfect split -> 0 FN, 0 FP, cost 0 (the true minimum)
+    sweep = optimize_threshold(y_true, y_proba, cost_fn=10.0, cost_fp=10.0, thresholds=thresholds)
+
+    assert sweep.optimal_threshold == 0.5
+    assert sweep.optimal_cost == 0.0
+
+
 def test_higher_cost_ratio_lowers_optimal_threshold():
     rng = np.random.default_rng(0)
     n = 2000

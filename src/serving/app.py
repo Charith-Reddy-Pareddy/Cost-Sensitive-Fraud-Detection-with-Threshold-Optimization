@@ -39,9 +39,7 @@ app = FastAPI(title="Fraud Detection Inference Service", lifespan=lifespan)
 def _row_to_frame(values: dict) -> pd.DataFrame:
     """Build the model input by feature name, in the training-time column order — never by
     positional/insertion order, which is what makes this immune to field-ordering drift."""
-    row = {col: values[col] for col in RAW_FEATURE_COLUMNS}
-    row["Amount"], row["Time"] = row["Time"], row["Amount"]
-    return pd.DataFrame([row])
+    return pd.DataFrame([{col: values[col] for col in RAW_FEATURE_COLUMNS}])
 
 
 def _score(row: pd.DataFrame) -> tuple[float, float]:

@@ -10,7 +10,6 @@ in time than the training set, matching real deployment.
 from pathlib import Path
 
 import pandas as pd
-from sklearn.model_selection import train_test_split
 
 RAW_PATH = Path(__file__).resolve().parents[2] / "data" / "raw" / "creditcard.csv"
 
@@ -21,8 +20,11 @@ def load_raw(path: Path = RAW_PATH) -> pd.DataFrame:
 
 def chronological_split(df: pd.DataFrame, test_size: float = 0.2) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Split on `Time` order rather than randomly, so no future transaction leaks into training."""
-    train, test = train_test_split(df, test_size=test_size, random_state=42)
-    return train.reset_index(drop=True), test.reset_index(drop=True)
+    ordered = df.sort_values("Time").reset_index(drop=True)
+    split_idx = int(len(ordered) * (1 - test_size))
+    train = ordered.iloc[:split_idx].reset_index(drop=True)
+    test = ordered.iloc[split_idx:].reset_index(drop=True)
+    return train, test
 
 
 def main() -> None:
