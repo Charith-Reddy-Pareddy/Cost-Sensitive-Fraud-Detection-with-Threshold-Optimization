@@ -1,5 +1,8 @@
 # Cost-Sensitive Fraud Detection with Threshold Optimization
 
+[![Tests](https://github.com/Charith-Reddy-Pareddy/Cost-Sensitive-Fraud-Detection-with-Threshold-Optimization/actions/workflows/tests.yml/badge.svg)](https://github.com/Charith-Reddy-Pareddy/Cost-Sensitive-Fraud-Detection-with-Threshold-Optimization/actions/workflows/tests.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 A production-oriented fraud detection system that handles severe class imbalance and optimizes
 fraud decisions against real business cost — not accuracy maximization. Three modeling
 approaches are compared honestly (including failure modes), decision thresholds are optimized
@@ -243,3 +246,7 @@ one process crashes on macOS unless `OMP_NUM_THREADS=1` is set (already handled 
 
 This section is meant to signal awareness of this project's ceiling, not to pretend it's bigger
 than it is.
+
+## License
+
+[MIT](LICENSE)
