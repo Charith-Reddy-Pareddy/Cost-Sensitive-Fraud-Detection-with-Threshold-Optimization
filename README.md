@@ -365,7 +365,6 @@ docker compose up --build
 
 ```
 ├── PLAN.md                          7-day build plan
-├── DEBUGGING_EXERCISE.md            controlled debugging exercise writeup (Day 7)
 ├── docs/                            per-day analysis writeups
 ├── data/
 │   ├── raw/                         gitignored — populated via kaggle CLI, see below
