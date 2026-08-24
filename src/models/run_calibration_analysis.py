@@ -1,9 +1,9 @@
 """Does calibration change the cost-optimal threshold?
 
-Trains the class-weighted XGBoost model on the *first* portion of the training period only,
-holds out the *last* portion of the training period (chronologically after fit, before test) as
-a calibration set, fits Platt scaling and isotonic regression on it, then compares raw vs.
-calibrated Brier scores and cost-optimal thresholds on the real, untouched test set.
+Trains the class-weighted XGBoost model on the full training split, fits Platt scaling and
+isotonic regression on the validation split (the same split used for every other
+model-selection decision in this project), selects each method's cost-optimal threshold on
+validation too, then reports Brier score and cost for all three on the untouched test split.
 """
 
 from pathlib import Path
@@ -13,7 +13,6 @@ import mlflow
 import numpy as np
 import pandas as pd
 
-from src.data.ingest import chronological_split
 from src.features.pipeline import RAW_FEATURE_COLUMNS, TARGET_COLUMN
 from src.mlflow_utils import use_local_tracking_store
 from src.models.calibration import (
@@ -24,7 +23,7 @@ from src.models.calibration import (
     fit_platt_scaling,
     reliability_curve,
 )
-from src.models.cost_engine import DEFAULT_COST_FALSE_NEGATIVE, DEFAULT_COST_FALSE_POSITIVE, optimize_threshold
+from src.models.cost_engine import DEFAULT_COST_FALSE_NEGATIVE, DEFAULT_COST_FALSE_POSITIVE, expected_cost, optimize_threshold
 from src.models.imbalance_comparison import build_pipeline
 
 PROCESSED_DIR = Path(__file__).resolve().parents[2] / "data" / "processed"
@@ -41,46 +40,51 @@ def main() -> None:
     mlflow.set_experiment("fraud-detection-calibration")
 
     X_train, y_train = _load_split("train")
+    X_val, y_val = _load_split("val")
     X_test, y_test = _load_split("test")
 
-    # carve a calibration slice out of the *end* of the training period, so it's still fully
-    # chronologically before the test set and never touches it
-    train_df = X_train.copy()
-    train_df[TARGET_COLUMN] = y_train.values
-    fit_df, calib_df = chronological_split(train_df, test_size=0.15)
-    X_fit, y_fit = fit_df[RAW_FEATURE_COLUMNS], fit_df[TARGET_COLUMN]
-    X_calib, y_calib = calib_df[RAW_FEATURE_COLUMNS], calib_df[TARGET_COLUMN]
-
     pipeline = build_pipeline("class_weight")
-    n_pos, n_neg = int(y_fit.sum()), len(y_fit) - int(y_fit.sum())
+    n_pos, n_neg = int(y_train.sum()), len(y_train) - int(y_train.sum())
     pipeline.set_params(classifier__scale_pos_weight=n_neg / n_pos)
-    pipeline.fit(X_fit, y_fit)
+    pipeline.fit(X_train, y_train)
 
-    calib_proba = pipeline.predict_proba(X_calib)[:, 1]
+    val_proba_raw = pipeline.predict_proba(X_val)[:, 1]
+    y_val_arr = y_val.to_numpy()
     test_proba_raw = pipeline.predict_proba(X_test)[:, 1]
     y_test_arr = y_test.to_numpy()
 
-    platt_model = fit_platt_scaling(calib_proba, y_calib.to_numpy())
+    platt_model = fit_platt_scaling(val_proba_raw, y_val_arr)
+    val_proba_platt = apply_platt_scaling(platt_model, val_proba_raw)
     test_proba_platt = apply_platt_scaling(platt_model, test_proba_raw)
 
-    iso_model = fit_isotonic(calib_proba, y_calib.to_numpy())
+    iso_model = fit_isotonic(val_proba_raw, y_val_arr)
+    val_proba_iso = apply_isotonic(iso_model, val_proba_raw)
     test_proba_iso = apply_isotonic(iso_model, test_proba_raw)
 
     with mlflow.start_run(run_name="calibration_comparison"):
         results = {}
-        for name, proba in [("raw", test_proba_raw), ("platt", test_proba_platt), ("isotonic", test_proba_iso)]:
-            brier = brier_score(y_test_arr, proba)
+        methods = [
+            ("raw", val_proba_raw, test_proba_raw),
+            ("platt", val_proba_platt, test_proba_platt),
+            ("isotonic", val_proba_iso, test_proba_iso),
+        ]
+        for name, val_proba, test_proba in methods:
+            # threshold selected on val, cost reported on test
             sweep = optimize_threshold(
-                y_test_arr, proba, cost_fn=DEFAULT_COST_FALSE_NEGATIVE, cost_fp=DEFAULT_COST_FALSE_POSITIVE
+                y_val_arr, val_proba, cost_fn=DEFAULT_COST_FALSE_NEGATIVE, cost_fp=DEFAULT_COST_FALSE_POSITIVE
             )
+            test_cost = expected_cost(
+                y_test_arr, test_proba, sweep.optimal_threshold, DEFAULT_COST_FALSE_NEGATIVE, DEFAULT_COST_FALSE_POSITIVE
+            )
+            brier = brier_score(y_test_arr, test_proba)
             results[name] = {
                 "brier_score": brier,
                 "optimal_threshold": sweep.optimal_threshold,
-                "optimal_cost": sweep.optimal_cost,
+                "test_cost": test_cost,
             }
             mlflow.log_metric(f"{name}_brier_score", brier)
             mlflow.log_metric(f"{name}_optimal_threshold", sweep.optimal_threshold)
-            mlflow.log_metric(f"{name}_optimal_cost", sweep.optimal_cost)
+            mlflow.log_metric(f"{name}_test_cost", test_cost)
 
         # quantile-binning the full, severely-imbalanced test set collapses almost every bin
         # near zero (fraud is 0.17% of rows), which makes the plot uninformative even though
@@ -109,9 +113,9 @@ def main() -> None:
         plt.close()
         mlflow.log_artifact(str(plot_path))
 
-        print(f"{'method':10} {'brier':>10} {'threshold':>10} {'cost':>12}")
+        print(f"{'method':10} {'brier':>10} {'threshold':>10} {'test cost':>12}")
         for name, r in results.items():
-            print(f"{name:10} {r['brier_score']:10.5f} {r['optimal_threshold']:10.3f} {r['optimal_cost']:12,.2f}")
+            print(f"{name:10} {r['brier_score']:10.5f} {r['optimal_threshold']:10.3f} {r['test_cost']:12,.2f}")
 
 
 if __name__ == "__main__":
