@@ -142,6 +142,56 @@ failure of the method — it's evidence that its *value* is dataset-dependent, c
 regimes where the raw signal is weak, which is itself a useful, non-obvious finding this project
 would not have produced without a second dataset.
 
+#### 5a. Adding a real per-entity feature, and repeating Experiments 2–3 on Sparkov
+
+Unlike the primary dataset, Sparkov has a card identifier (`cc_num`), which makes a genuine
+per-entity feature possible: `card_txn_count_24h` / `card_amt_sum_24h`, a rolling count and
+amount sum of that same card's transactions in the preceding 24 hours, computed causally
+(`closed="left"` — the window is `[t-24h, t)`, strictly excluding the transaction's own row, so
+it can never leak information about itself). Adding it and repeating the walk-forward and
+bootstrap checks from Experiments 2–3, this time on Sparkov:
+
+| | Sparkov, no velocity feature | Sparkov, + card velocity feature |
+|---|---|---|
+| Baseline PR-AUC (no weighting) | 0.909 | **0.969** |
+| Threshold optimization vs. default (single split) | 0% reduction | **−1.8%** (actively worse) |
+| Cost-reduction 95% bootstrap CI | [0.0%, 0.0%] | [−9.1%, 1.5%] |
+| Walk-forward: optimized beats default | 2 of 4 folds | **1 of 4 folds** |
+
+The velocity feature is a genuinely strong signal — it pushes an already-strong baseline from
+0.909 to 0.969 PR-AUC — and it makes the "threshold optimization doesn't help here" finding
+*more* decisive, not less: with a near-perfect model, optimizing the threshold has less room to
+help and more room to overfit to the validation split's noise. This directly answers the
+Limitations concern in the previous version of this report that the Sparkov comparison used only
+one split — it doesn't anymore, and the repeated checks confirm the single-split result rather
+than overturning it.
+
+#### 5b. Closing the streaming gap: does the live feature actually reach the model?
+
+The README's streaming section is explicit that the primary dataset's Redis sliding-window
+aggregate is computed and logged but never fed into the model — there's no entity ID to key a
+meaningful per-card feature on. Sparkov's `cc_num` removes that obstacle, so
+[`src/streaming/run_sparkov_streaming_demo.py`](src/streaming/run_sparkov_streaming_demo.py)
+replays 5,000 real transactions through a per-card Redis sliding window
+([`src/streaming/redis_features_sparkov.py`](src/streaming/redis_features_sparkov.py)) and feeds
+the *live* `card_txn_count_24h` / `card_amt_sum_24h` — not the offline, pre-computed version —
+directly into `pipeline.predict_proba(...)` for each transaction, in real time. Verified output,
+one card mid-fraud-burst:
+
+```
+cc_num=3573030041201292 amt=$8.28    live_card_txn_count_24h=4  fraud_probability=0.9999
+cc_num=3573030041201292 amt=$353.57  live_card_txn_count_24h=5  fraud_probability=0.9998
+cc_num=3573030041201292 amt=$876.10  live_card_txn_count_24h=6  fraud_probability=0.9997
+...
+cc_num=3573030041201292 amt=$233.53  live_card_txn_count_24h=11 fraud_probability=0.9983
+```
+
+47 fraud transactions were replayed, 87 flagged, 99.2% overall accuracy — but the number that
+matters here isn't the accuracy, it's that `live_card_txn_count_24h` is visibly climbing
+transaction-by-transaction as Redis accumulates state, and the model's prediction is responding
+to that same live number. This is what "the streaming feature actually feeds the model" means in
+practice, not just as a claim.
+
 ## Statistical analysis
 
 Fraud is 0.17% of the primary test split (52 of 42,721 rows) — not much to draw firm conclusions
@@ -171,8 +221,8 @@ intervention** — its benefit is real on average but small relative to the nois
   because of this, not because of a weak method.
 - **Illustrative costs.** $500/$5 are demonstration figures, not sourced fraud-loss data — this
   is why Experiment 3 treats them as uncertain rather than fixed.
-- **The Sparkov comparison uses one train/val/test split**, not its own walk-forward or bootstrap
-  analysis — a full replication of Experiments 2–4 on Sparkov is future work, not done here.
+- **The Sparkov comparison's training-objective check (Experiment 4) is not yet repeated on
+  Sparkov** — only Experiments 2 (walk-forward) and 3 (bootstrap) have been, in Experiment 5a.
 - **Established techniques throughout.** XGBoost, class weighting, SMOTE, autoencoders,
   threshold optimization, Platt/isotonic calibration, bootstrap CIs — no new algorithm, loss
   function, or optimization procedure is introduced. What's novel here is the combination and,
@@ -184,11 +234,11 @@ intervention** — its benefit is real on average but small relative to the nois
 ## Future work
 
 - Multi-day data to test genuine concept drift, not just intra-day window stability.
-- Repeat Experiments 2–4 on Sparkov to see whether *its* conclusions are stable, not just
-  whether the primary dataset's conclusions transfer.
-- Wire the streaming pipeline's Redis sliding-window aggregate into the model as a trained
-  feature (currently computed and logged, explicitly not used — see the README's streaming
-  section) — Sparkov's `cc_num` field would finally make a genuine per-entity version of that
-  feature possible, unlike the primary dataset.
+- Repeat Experiment 4 (training-objective vs. decision-policy) on Sparkov — Experiments 2 and 3
+  are now done (Experiment 5a).
+- Wire the *offline* card-velocity feature's live Redis computation into the actual served
+  Sparkov model as a standing service, not just a replay demo script — the mechanism is proven
+  end-to-end (Experiment 5b), but there's no persistent Sparkov production pipeline the way the
+  primary dataset has one in `src/serving/`.
 - A theoretically motivated cost-sensitive objective (e.g., a custom asymmetric loss function
   rather than sample-weighting) as a fifth training-objective configuration.

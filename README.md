@@ -407,7 +407,50 @@ when a model already separates classes almost perfectly, there's much less room 
 class-weighting or threshold-tuning to help, and rebalancing can actively distort an already
 well-calibrated ranking. This isn't a failure of the method; it's evidence that its value is
 dataset-dependent, concentrated in regimes where the raw signal is weak — a finding this project
-would not have produced without a second dataset. Full discussion:
+would not have produced without a second dataset.
+
+### Adding a real per-entity feature, and re-checking robustness on Sparkov
+
+Sparkov has a card identifier (`cc_num`) the primary dataset doesn't — enough to build a genuine
+per-entity feature: `card_txn_count_24h` / `card_amt_sum_24h`, a rolling count and amount sum of
+that same card's transactions in the preceding 24 hours, computed causally so a transaction can
+never see itself ([`src/data/ingest_sparkov.py`](src/data/ingest_sparkov.py)). Adding it and
+repeating the [walk-forward](#temporal-stability-walk-forward-evaluation) and
+[bootstrap](#statistical-stability) checks — this time on Sparkov:
+
+| | Sparkov, no velocity feature | Sparkov, + card velocity feature |
+|---|---|---|
+| Baseline PR-AUC (no weighting) | 0.909 | **0.969** |
+| Threshold optimization vs. default (single split) | 0% reduction | **−1.8%** (actively worse) |
+| Cost-reduction 95% bootstrap CI | [0.0%, 0.0%] | [−9.1%, 1.5%] |
+| Walk-forward: optimized beats default | 2 of 4 folds | **1 of 4 folds** |
+
+The velocity feature is a genuinely strong signal — PR-AUC climbs from 0.909 to 0.969 — and it
+makes the "threshold optimization doesn't help here" finding *more* decisive, not less: a
+near-perfect model has even less room for threshold-tuning to help and more room to overfit
+validation-split noise. The Sparkov comparison no longer rests on a single split.
+
+### Closing the streaming gap
+
+The [streaming section below](#streaming-prototype-primary-dataset) is explicit that the primary
+dataset's Redis feature is never fed into the model — no entity ID to key it on. Sparkov's
+`cc_num` removes that obstacle:
+[`src/streaming/run_sparkov_streaming_demo.py`](src/streaming/run_sparkov_streaming_demo.py)
+replays 5,000 real transactions through a **per-card** Redis sliding window
+([`src/streaming/redis_features_sparkov.py`](src/streaming/redis_features_sparkov.py)) and feeds
+the *live* velocity numbers directly into `pipeline.predict_proba(...)` for each one — not the
+offline pre-computed version. Verified output, one card mid-fraud-burst:
+
+```
+cc_num=3573030041201292 amt=$8.28    live_card_txn_count_24h=4  fraud_probability=0.9999
+cc_num=3573030041201292 amt=$353.57  live_card_txn_count_24h=5  fraud_probability=0.9998
+cc_num=3573030041201292 amt=$876.10  live_card_txn_count_24h=6  fraud_probability=0.9997
+```
+
+47 fraud transactions in the replay, 87 flagged, 99.2% accuracy — but the number that matters is
+`live_card_txn_count_24h` climbing transaction-by-transaction as Redis accumulates real state,
+with the model's prediction responding to that same live number. That's the streaming feature
+actually feeding the model, demonstrated rather than just claimed. Full discussion:
 [`RESEARCH_REPORT.md`](RESEARCH_REPORT.md#5-does-any-of-this-generalize-to-a-structurally-different-dataset).
 
 ## Inference service
@@ -462,10 +505,12 @@ curl -X POST "localhost:8000/replay?n=500&delay_ms=1"
 curl localhost:8000/latency
 ```
 
-## Streaming prototype: Kafka → Redis (not model-connected)
+## Streaming prototype (primary dataset)
 
-`docker-compose.yml` also brings up a streaming demo — deliberately kept separate from the
-inference path above, both architecturally and in this README:
+`docker-compose.yml` also brings up a streaming demo for the primary dataset — deliberately kept
+separate from the inference path above, both architecturally and in this README. (Sparkov gets a
+different, model-connected version of this — see
+[Closing the streaming gap](#closing-the-streaming-gap) above.)
 
 ```mermaid
 flowchart LR
@@ -515,7 +560,8 @@ docker compose up --build
 │   │                                 bootstrap CIs, SHAP, ablation, temporal/cost-uncertainty/
 │   │                                 training-objective/Sparkov robustness checks
 │   ├── serving/                     FastAPI inference service
-│   └── streaming/                   Kafka/Redpanda → Redis stretch goal
+│   └── streaming/                   Kafka/Redpanda → Redis; per-card version model-connected
+│                                     for Sparkov, global version not for the primary dataset
 ├── tests/                           pytest suite
 ├── .github/workflows/               CI (runs the test suite on every push)
 ├── docker-compose.yml
@@ -564,15 +610,16 @@ one process crashes on macOS unless `OMP_NUM_THREADS=1` is set (already handled 
 
 - Multi-day/multi-month data to actually study concept drift, instead of intra-day window
   stability.
-- A live transaction stream instead of a static replay for the serving layer, with the Redis
-  sliding-window aggregate actually wired into the model as a trained feature.
+- A standing, served Sparkov production pipeline the way the primary dataset has one in
+  `src/serving/` — the live Redis-to-model connection is proven end-to-end
+  ([Closing the streaming gap](#closing-the-streaming-gap)), but only as a replay demo script,
+  not a persistent service.
 - More fraud examples in the primary dataset — with only 492 positive rows, the bootstrap CIs
   above are wide enough that a production deployment would need materially more labeled fraud
   before trusting a single point estimate.
 
-Full future-work list, including the walk-forward and cost-uncertainty analyses repeated on
-Sparkov: [`RESEARCH_REPORT.md`](RESEARCH_REPORT.md#future-work). This section is meant to signal
-awareness of this project's ceiling, not to pretend it's bigger than it is.
+Full future-work list: [`RESEARCH_REPORT.md`](RESEARCH_REPORT.md#future-work). This section is
+meant to signal awareness of this project's ceiling, not to pretend it's bigger than it is.
 
 ## License
 
