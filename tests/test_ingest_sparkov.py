@@ -22,6 +22,7 @@ def _toy_raw_frame() -> pd.DataFrame:
     return pd.DataFrame(
         {
             "trans_date_trans_time": ["2019-01-01 12:00:00", "2019-01-02 03:00:00"],
+            "cc_num": [1, 2],
             "category": ["grocery_pos", "shopping_net"],
             "amt": [50.0, 200.0],
             "gender": ["F", "M"],
@@ -39,7 +40,11 @@ def _toy_raw_frame() -> pd.DataFrame:
 
 def test_engineer_features_produces_expected_columns():
     features = engineer_features(_toy_raw_frame())
-    for col in ["amt", "hour", "age_years", "distance_km", "city_pop", "is_male", "unix_time", "is_fraud"]:
+    expected_cols = [
+        "amt", "hour", "age_years", "distance_km", "city_pop", "is_male",
+        "card_txn_count_24h", "card_amt_sum_24h", "unix_time", "is_fraud",
+    ]
+    for col in expected_cols:
         assert col in features.columns
     assert "category_grocery_pos" in features.columns
     assert "category_shopping_net" in features.columns
