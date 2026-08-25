@@ -19,6 +19,7 @@ PROCESSED_DIR = Path(__file__).resolve().parents[2] / "data" / "processed" / "sp
 
 USE_COLUMNS = [
     "trans_date_trans_time",
+    "cc_num",
     "category",
     "amt",
     "gender",
@@ -31,6 +32,8 @@ USE_COLUMNS = [
     "merch_long",
     "is_fraud",
 ]
+
+VELOCITY_WINDOW = "24h"
 
 TARGET_COLUMN = "is_fraud"
 
@@ -47,8 +50,25 @@ def load_raw(path: Path = RAW_PATH) -> pd.DataFrame:
     return pd.read_csv(path, usecols=USE_COLUMNS)
 
 
-def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
+def add_card_velocity_features(df: pd.DataFrame, window: str = VELOCITY_WINDOW) -> pd.DataFrame:
+    """Rolling per-card transaction count and amount sum over the preceding `window`, computed
+    causally: `closed="left"` makes the window `[t - window, t)` — it strictly excludes the
+    current row itself, so a transaction's velocity feature never uses its own row. This is the
+    real per-entity feature the primary dataset can't support (no card ID); it's what the
+    streaming Redis sliding window now actually feeds into the model, instead of just being
+    logged alongside it.
+    """
     df = df.copy()
+    df["trans_date_trans_time"] = pd.to_datetime(df["trans_date_trans_time"])
+    df = df.sort_values(["cc_num", "trans_date_trans_time"]).reset_index(drop=True)
+    rolling = df.set_index("trans_date_trans_time").groupby("cc_num")["amt"].rolling(window, closed="left")
+    df["card_txn_count_24h"] = rolling.count().reset_index(drop=True).fillna(0).to_numpy()
+    df["card_amt_sum_24h"] = rolling.sum().reset_index(drop=True).fillna(0).to_numpy()
+    return df
+
+
+def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
+    df = add_card_velocity_features(df)
     trans_time = pd.to_datetime(df["trans_date_trans_time"])
     dob = pd.to_datetime(df["dob"])
 
@@ -60,7 +80,22 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     category_dummies = pd.get_dummies(df["category"], prefix="category", dtype=int)
 
     features = pd.concat(
-        [df[["amt", "hour", "age_years", "distance_km", "city_pop", "is_male", "unix_time"]], category_dummies],
+        [
+            df[
+                [
+                    "amt",
+                    "hour",
+                    "age_years",
+                    "distance_km",
+                    "city_pop",
+                    "is_male",
+                    "card_txn_count_24h",
+                    "card_amt_sum_24h",
+                    "unix_time",
+                ]
+            ],
+            category_dummies,
+        ],
         axis=1,
     )
     features[TARGET_COLUMN] = df[TARGET_COLUMN].values
