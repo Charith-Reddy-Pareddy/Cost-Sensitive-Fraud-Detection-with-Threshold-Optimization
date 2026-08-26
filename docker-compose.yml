@@ -16,6 +16,22 @@ services:
     ports:
       - "6379:6379"
 
+  sparkov-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.sparkov-serving
+    ports:
+      - "8001:8001"
+    environment:
+      - REDIS_HOST=redis
+    depends_on:
+      - redis
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   redpanda:
     image: docker.redpanda.com/redpandadata/redpanda:latest
     command:
