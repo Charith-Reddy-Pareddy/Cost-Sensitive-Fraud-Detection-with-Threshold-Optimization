@@ -1,6 +1,6 @@
 import pandas as pd
 
-from src.data.ingest_sparkov import _haversine_km, engineer_features
+from src.data.ingest_sparkov import FEATURE_COLUMNS, STATIC_FEATURE_COLUMNS, VELOCITY_FEATURE_COLUMNS, _haversine_km, engineer_features, raw_row_to_static_features
 
 
 def test_haversine_zero_distance_for_same_point():
@@ -58,3 +58,22 @@ def test_engineer_features_hour_extracted_correctly():
 def test_engineer_features_is_male_binary():
     features = engineer_features(_toy_raw_frame())
     assert list(features["is_male"]) == [0, 1]
+
+
+def test_raw_row_to_static_features_matches_engineer_features():
+    """Pins the exact bug class this refactor exists to prevent: the live serving path
+    (raw_row_to_static_features) and the offline training path (engineer_features) must agree
+    on every static feature for the same row, or the model would score live traffic on
+    different values than it was trained to expect."""
+    raw = _toy_raw_frame()
+    offline = engineer_features(raw)
+
+    for i in range(len(raw)):
+        live = raw_row_to_static_features(raw.iloc[i])
+        for col in STATIC_FEATURE_COLUMNS:
+            assert live[col] == offline[col].iloc[i], f"mismatch on {col} for row {i}"
+
+
+def test_feature_columns_is_static_plus_velocity_plus_category():
+    assert FEATURE_COLUMNS[: len(STATIC_FEATURE_COLUMNS)] == STATIC_FEATURE_COLUMNS
+    assert FEATURE_COLUMNS[len(STATIC_FEATURE_COLUMNS) : len(STATIC_FEATURE_COLUMNS) + len(VELOCITY_FEATURE_COLUMNS)] == VELOCITY_FEATURE_COLUMNS

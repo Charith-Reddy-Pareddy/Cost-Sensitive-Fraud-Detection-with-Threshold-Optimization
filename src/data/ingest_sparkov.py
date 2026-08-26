@@ -37,6 +37,31 @@ VELOCITY_WINDOW = "24h"
 
 TARGET_COLUMN = "is_fraud"
 
+# Fixed at the categories actually present in the training data, rather than re-derived per
+# call — a persistent serving process needs this list without loading the full training set,
+# and a fixed, named list is what keeps training-time and serving-time feature order in sync
+# (the exact bug class the primary dataset's Day 7 debugging exercise targeted).
+CATEGORY_COLUMNS = [
+    "category_entertainment",
+    "category_food_dining",
+    "category_gas_transport",
+    "category_grocery_net",
+    "category_grocery_pos",
+    "category_health_fitness",
+    "category_home",
+    "category_kids_pets",
+    "category_misc_net",
+    "category_misc_pos",
+    "category_personal_care",
+    "category_shopping_net",
+    "category_shopping_pos",
+    "category_travel",
+]
+
+STATIC_FEATURE_COLUMNS = ["amt", "hour", "age_years", "distance_km", "city_pop", "is_male"]
+VELOCITY_FEATURE_COLUMNS = ["card_txn_count_24h", "card_amt_sum_24h"]
+FEATURE_COLUMNS = STATIC_FEATURE_COLUMNS + VELOCITY_FEATURE_COLUMNS + CATEGORY_COLUMNS
+
 
 def _haversine_km(lat1: np.ndarray, lon1: np.ndarray, lat2: np.ndarray, lon2: np.ndarray) -> np.ndarray:
     r_earth_km = 6371.0
@@ -67,6 +92,15 @@ def add_card_velocity_features(df: pd.DataFrame, window: str = VELOCITY_WINDOW) 
     return df
 
 
+def _category_dummies(category: pd.Series) -> pd.DataFrame:
+    """One-hot encode against the fixed CATEGORY_COLUMNS list, not whatever categories happen
+    to appear in this particular frame — keeps a single row (serving) or a small test frame
+    aligned to the same columns full training used, instead of silently producing a narrower
+    (and therefore misaligned) set of columns."""
+    dummies = pd.get_dummies(category, prefix="category", dtype=int)
+    return dummies.reindex(columns=CATEGORY_COLUMNS, fill_value=0)
+
+
 def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     df = add_card_velocity_features(df)
     trans_time = pd.to_datetime(df["trans_date_trans_time"])
@@ -77,28 +111,35 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     df["distance_km"] = _haversine_km(df["lat"], df["long"], df["merch_lat"], df["merch_long"])
     df["is_male"] = (df["gender"] == "M").astype(int)
 
-    category_dummies = pd.get_dummies(df["category"], prefix="category", dtype=int)
-
     features = pd.concat(
-        [
-            df[
-                [
-                    "amt",
-                    "hour",
-                    "age_years",
-                    "distance_km",
-                    "city_pop",
-                    "is_male",
-                    "card_txn_count_24h",
-                    "card_amt_sum_24h",
-                    "unix_time",
-                ]
-            ],
-            category_dummies,
-        ],
+        [df[STATIC_FEATURE_COLUMNS + VELOCITY_FEATURE_COLUMNS + ["unix_time"]], _category_dummies(df["category"])],
         axis=1,
     )
     features[TARGET_COLUMN] = df[TARGET_COLUMN].values
+    return features
+
+
+def raw_row_to_static_features(row: pd.Series) -> dict:
+    """Everything `engineer_features` computes per-row except the velocity features — used by
+    the live serving path, where `card_txn_count_24h` / `card_amt_sum_24h` come from Redis
+    instead of this static, offline computation."""
+    trans_time = pd.to_datetime(row["trans_date_trans_time"])
+    dob = pd.to_datetime(row["dob"])
+    distance_km = _haversine_km(
+        np.array([row["lat"]]), np.array([row["long"]]), np.array([row["merch_lat"]]), np.array([row["merch_long"]])
+    )[0]
+
+    features = {
+        "amt": row["amt"],
+        "hour": trans_time.hour,
+        "age_years": (trans_time - dob).days / 365.25,
+        "distance_km": float(distance_km),
+        "city_pop": row["city_pop"],
+        "is_male": 1 if row["gender"] == "M" else 0,
+    }
+    for col in CATEGORY_COLUMNS:
+        cat_name = col[len("category_") :]
+        features[col] = 1 if row["category"] == cat_name else 0
     return features
 
 
