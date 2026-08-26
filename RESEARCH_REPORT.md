@@ -192,6 +192,26 @@ transaction-by-transaction as Redis accumulates state, and the model's predictio
 to that same live number. This is what "the streaming feature actually feeds the model" means in
 practice, not just as a claim.
 
+#### 5c. Does the training-objective finding (Experiment 4) also replicate on Sparkov?
+
+Same four configurations as Experiment 4, on Sparkov with the velocity feature
+([`src/models/run_sparkov_training_objective_comparison.py`](src/models/run_sparkov_training_objective_comparison.py)):
+
+| Configuration | Threshold | PR-AUC | Recall | Expected cost |
+|---|---|---|---|---|
+| A: standard training, threshold 0.5 | 0.50 | 0.969 | 0.887 | $64,205 |
+| B: standard training, optimized threshold | 0.02 | 0.969 | 0.977 | $18,305 |
+| **C: cost-weighted training, threshold 0.5** | **0.50** | **0.969** | 0.980 | **$16,230** |
+| D: cost-weighted training, optimized threshold | 0.38 | 0.969 | 0.982 | $16,495 |
+
+**Yes — C beats both B and D here too.** ("Standard training" here has no weighting at all, not
+even class weighting, so A's default threshold is badly miscalibrated — hence threshold tuning
+alone (B) recovering most of the cost. But the comparable claim, C vs. D, replicates exactly: the
+cheapest configuration is cost-weighted training at the plain default threshold, not the version
+with a threshold additionally tuned on top of it.) Combined with Experiment 5a, every Sparkov
+robustness check now agrees with its primary-dataset counterpart in direction, even where the
+magnitudes differ substantially.
+
 ## Statistical analysis
 
 Fraud is 0.17% of the primary test split (52 of 42,721 rows) — not much to draw firm conclusions
@@ -221,8 +241,6 @@ intervention** — its benefit is real on average but small relative to the nois
   because of this, not because of a weak method.
 - **Illustrative costs.** $500/$5 are demonstration figures, not sourced fraud-loss data — this
   is why Experiment 3 treats them as uncertain rather than fixed.
-- **The Sparkov comparison's training-objective check (Experiment 4) is not yet repeated on
-  Sparkov** — only Experiments 2 (walk-forward) and 3 (bootstrap) have been, in Experiment 5a.
 - **Established techniques throughout.** XGBoost, class weighting, SMOTE, autoencoders,
   threshold optimization, Platt/isotonic calibration, bootstrap CIs — no new algorithm, loss
   function, or optimization procedure is introduced. What's novel here is the combination and,
@@ -234,8 +252,6 @@ intervention** — its benefit is real on average but small relative to the nois
 ## Future work
 
 - Multi-day data to test genuine concept drift, not just intra-day window stability.
-- Repeat Experiment 4 (training-objective vs. decision-policy) on Sparkov — Experiments 2 and 3
-  are now done (Experiment 5a).
 - Wire the *offline* card-velocity feature's live Redis computation into the actual served
   Sparkov model as a standing service, not just a replay demo script — the mechanism is proven
   end-to-end (Experiment 5b), but there's no persistent Sparkov production pipeline the way the

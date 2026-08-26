@@ -453,6 +453,26 @@ with the model's prediction responding to that same live number. That's the stre
 actually feeding the model, demonstrated rather than just claimed. Full discussion:
 [`RESEARCH_REPORT.md`](RESEARCH_REPORT.md#5-does-any-of-this-generalize-to-a-structurally-different-dataset).
 
+### Does the training-objective finding replicate too?
+
+[Training-objective vs. decision-policy](#training-objective-vs-decision-policy) above found
+cost-weighted training alone (at the plain default threshold) beats threshold tuning alone or
+combined, on the primary dataset. Same four configurations, repeated on Sparkov with the
+velocity feature
+([`src/models/run_sparkov_training_objective_comparison.py`](src/models/run_sparkov_training_objective_comparison.py)):
+
+| Configuration | Threshold | Expected cost |
+|---|---|---|
+| Standard training, threshold 0.5 | 0.50 | $64,205 |
+| Standard training, optimized threshold | 0.02 | $18,305 |
+| **Cost-weighted training, threshold 0.5** | **0.50** | **$16,230** |
+| Cost-weighted training, optimized threshold | 0.38 | $16,495 |
+
+**Yes.** Cost-weighted training at the default threshold is still the cheapest configuration —
+adding threshold tuning on top doesn't help here either. Every Sparkov robustness check now
+agrees in direction with its primary-dataset counterpart, even where the magnitudes differ
+substantially.
+
 ## Inference service
 
 A FastAPI service (`src/serving/app.py`) loads the persisted production pipeline — the
@@ -597,6 +617,10 @@ kaggle datasets download -d kartik2112/fraud-detection -p data/raw/sparkov
 unzip data/raw/sparkov/fraud-detection.zip -d data/raw/sparkov
 python -m src.data.ingest_sparkov
 python -m src.models.run_sparkov_validation
+python -m src.models.run_sparkov_bootstrap_analysis
+python -m src.models.run_sparkov_temporal_evaluation
+python -m src.models.run_sparkov_training_objective_comparison
+python -m src.streaming.run_sparkov_streaming_demo  # needs redis running (docker compose up -d redis)
 
 pytest tests/ -q
 ```
