@@ -192,6 +192,16 @@ transaction-by-transaction as Redis accumulates state, and the model's predictio
 to that same live number. This is what "the streaming feature actually feeds the model" means in
 practice, not just as a claim.
 
+This mechanism is no longer only a replay script.
+[`src/models/train_sparkov_production_model.py`](src/models/train_sparkov_production_model.py)
+persists a real production pipeline (threshold selected on val, same protocol as everything
+else), and [`src/serving/sparkov_app.py`](src/serving/sparkov_app.py) is a standing FastAPI
+service that performs the same live Redis lookup per request — containerized
+(`Dockerfile.sparkov-serving`, `docker compose up sparkov-api redis`) and verified to return the
+identical probability inside and outside Docker for the same input. The primary dataset's
+serving story (`src/serving/app.py`) and Sparkov's (`src/serving/sparkov_app.py`) now have
+genuine parity, not just the primary dataset having a service and Sparkov having a demo script.
+
 #### 5c. Does the training-objective finding (Experiment 4) also replicate on Sparkov?
 
 Same four configurations as Experiment 4, on Sparkov with the velocity feature
@@ -252,9 +262,7 @@ intervention** — its benefit is real on average but small relative to the nois
 ## Future work
 
 - Multi-day data to test genuine concept drift, not just intra-day window stability.
-- Wire the *offline* card-velocity feature's live Redis computation into the actual served
-  Sparkov model as a standing service, not just a replay demo script — the mechanism is proven
-  end-to-end (Experiment 5b), but there's no persistent Sparkov production pipeline the way the
-  primary dataset has one in `src/serving/`.
 - A theoretically motivated cost-sensitive objective (e.g., a custom asymmetric loss function
   rather than sample-weighting) as a fifth training-objective configuration.
+- Repeat the cost-uncertainty sweep (Experiment 3) on Sparkov — only walk-forward, bootstrap, and
+  the training-objective comparison have been repeated there so far (Experiments 5a–5c).

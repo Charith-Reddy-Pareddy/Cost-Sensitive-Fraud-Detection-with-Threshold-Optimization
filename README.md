@@ -453,6 +453,29 @@ with the model's prediction responding to that same live number. That's the stre
 actually feeding the model, demonstrated rather than just claimed. Full discussion:
 [`RESEARCH_REPORT.md`](RESEARCH_REPORT.md#5-does-any-of-this-generalize-to-a-structurally-different-dataset).
 
+That mechanism is no longer just a replay script — `src/serving/sparkov_app.py` is a real,
+standing FastAPI service that does the same live Redis lookup per request, containerized
+(`docker compose up sparkov-api redis`) and verified to score identically inside and outside
+Docker:
+
+```bash
+docker compose up -d sparkov-api redis
+curl -X POST localhost:8001/predict -H "Content-Type: application/json" -d '{
+  "cc_num": "4111111111111111", "trans_date_trans_time": "2020-06-15 14:30:00",
+  "dob": "1985-03-20", "amt": 999.99, "lat": 40.0, "long": -74.0,
+  "merch_lat": 45.0, "merch_long": -80.0, "city_pop": 50000,
+  "gender": "F", "category": "shopping_net"
+}'
+```
+
+```json
+{"fraud_probability": 0.7929, "is_fraud": true, "threshold": 0.51, "latency_ms": 76.0}
+```
+
+A large, out-of-town, unusual-category transaction correctly gets flagged — and this is the
+primary dataset's earlier "what I'd do with more data" wish, now done: a standing per-card
+feature store that feeds the model, not just a batch replay.
+
 ### Does the training-objective finding replicate too?
 
 [Training-objective vs. decision-policy](#training-objective-vs-decision-policy) above found
@@ -579,7 +602,7 @@ docker compose up --build
 │   ├── models/                      training pipelines, cost engine, calibration,
 │   │                                 bootstrap CIs, SHAP, ablation, temporal/cost-uncertainty/
 │   │                                 training-objective/Sparkov robustness checks
-│   ├── serving/                     FastAPI inference service
+│   ├── serving/                     FastAPI inference services (primary + standing Sparkov)
 │   └── streaming/                   Kafka/Redpanda → Redis; per-card version model-connected
 │                                     for Sparkov, global version not for the primary dataset
 ├── tests/                           pytest suite
@@ -621,6 +644,9 @@ python -m src.models.run_sparkov_bootstrap_analysis
 python -m src.models.run_sparkov_temporal_evaluation
 python -m src.models.run_sparkov_training_objective_comparison
 python -m src.streaming.run_sparkov_streaming_demo  # needs redis running (docker compose up -d redis)
+python -m src.models.train_sparkov_production_model
+# then either: uvicorn src.serving.sparkov_app:app --port 8001
+# or:          docker compose up -d sparkov-api redis
 
 pytest tests/ -q
 ```
@@ -634,10 +660,6 @@ one process crashes on macOS unless `OMP_NUM_THREADS=1` is set (already handled 
 
 - Multi-day/multi-month data to actually study concept drift, instead of intra-day window
   stability.
-- A standing, served Sparkov production pipeline the way the primary dataset has one in
-  `src/serving/` — the live Redis-to-model connection is proven end-to-end
-  ([Closing the streaming gap](#closing-the-streaming-gap)), but only as a replay demo script,
-  not a persistent service.
 - More fraud examples in the primary dataset — with only 492 positive rows, the bootstrap CIs
   above are wide enough that a production deployment would need materially more labeled fraud
   before trusting a single point estimate.
