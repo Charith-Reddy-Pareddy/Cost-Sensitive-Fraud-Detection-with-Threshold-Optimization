@@ -95,6 +95,55 @@
     font-size: 0.85rem;
   }
   footer a { color: var(--accent); }
+
+  .explorer {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 12px;
+    padding: 20px 22px 24px;
+    margin: 18px 0;
+  }
+  .explorer-readout {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+  .explorer-readout .stat { padding: 12px 14px; }
+  .explorer-slider {
+    width: 100%;
+    accent-color: var(--accent);
+    height: 6px;
+    margin: 4px 0 22px;
+  }
+  .explorer-bars { display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px; }
+  .bar-row { display: flex; align-items: center; gap: 12px; font-size: 0.85rem; color: var(--text-dim); }
+  .bar-row span { width: 70px; flex-shrink: 0; }
+  .bar-track {
+    flex: 1;
+    height: 10px;
+    background: #0e1420;
+    border-radius: 5px;
+    overflow: hidden;
+  }
+  .bar-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 5px;
+    transition: width 0.08s linear;
+    width: 0%;
+  }
+  .bar-fill.recall { background: var(--good); }
+  #ex-jump {
+    background: transparent;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    border-radius: 7px;
+    padding: 8px 14px;
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
+  #ex-jump:hover { background: rgba(90, 169, 255, 0.1); }
 </style>
 </head>
 <body>
@@ -143,6 +192,31 @@
     so abundant they flood the false-positive-rate axis. PR-AUC is far more sensitive to what
     happens at realistic operating thresholds — notice its chance line sits at 0.0012, essentially
     on the floor.
+  </div>
+</section>
+
+<section>
+  <h2>Try it yourself: drag the threshold</h2>
+  <p class="note">
+    Every value below is read from the real 101-point threshold sweep on the test set — nothing
+    here is simulated in the browser. This is the actual tradeoff the rest of the page describes
+    in words, made draggable.
+  </p>
+  <div class="explorer">
+    <div class="explorer-readout">
+      <div class="stat"><div class="label">Threshold</div><div class="value" id="ex-threshold">0.09</div></div>
+      <div class="stat"><div class="label">Precision</div><div class="value" id="ex-precision">—</div></div>
+      <div class="stat"><div class="label">Recall</div><div class="value" id="ex-recall">—</div></div>
+      <div class="stat"><div class="label">False positives</div><div class="value" id="ex-fp">—</div></div>
+      <div class="stat"><div class="label">Missed fraud</div><div class="value" id="ex-fn">—</div></div>
+      <div class="stat good"><div class="label">Expected cost</div><div class="value" id="ex-cost">—</div></div>
+    </div>
+    <input type="range" id="ex-slider" min="0" max="100" step="1" value="9" class="explorer-slider">
+    <div class="explorer-bars">
+      <div class="bar-row"><span>Precision</span><div class="bar-track"><div class="bar-fill" id="ex-precision-bar"></div></div></div>
+      <div class="bar-row"><span>Recall</span><div class="bar-track"><div class="bar-fill recall" id="ex-recall-bar"></div></div></div>
+    </div>
+    <button id="ex-jump" type="button">Jump to cost-optimal (0.09)</button>
   </div>
 </section>
 
@@ -220,5 +294,56 @@
 </footer>
 
 </div>
+
+<script>
+(async function () {
+  const slider = document.getElementById("ex-slider");
+  const jumpBtn = document.getElementById("ex-jump");
+  const els = {
+    threshold: document.getElementById("ex-threshold"),
+    precision: document.getElementById("ex-precision"),
+    recall: document.getElementById("ex-recall"),
+    fp: document.getElementById("ex-fp"),
+    fn: document.getElementById("ex-fn"),
+    cost: document.getElementById("ex-cost"),
+    precisionBar: document.getElementById("ex-precision-bar"),
+    recallBar: document.getElementById("ex-recall-bar"),
+  };
+
+  let data;
+  try {
+    const res = await fetch("threshold_sweep_data.json");
+    data = await res.json();
+  } catch (e) {
+    els.threshold.textContent = "n/a";
+    return;
+  }
+
+  const optimalIndex = Math.round(data.optimal_threshold * 100);
+  slider.value = optimalIndex;
+  jumpBtn.textContent = `Jump to cost-optimal (${data.optimal_threshold.toFixed(2)})`;
+
+  function render(index) {
+    const row = data.sweep[index];
+    els.threshold.textContent = row.threshold.toFixed(2);
+    els.precision.textContent = row.precision.toFixed(3);
+    els.recall.textContent = row.recall.toFixed(3);
+    els.fp.textContent = row.fp.toLocaleString();
+    els.fn.textContent = row.fn.toLocaleString();
+    els.cost.textContent = "$" + row.cost.toLocaleString();
+    els.precisionBar.style.width = (row.precision * 100) + "%";
+    els.recallBar.style.width = (row.recall * 100) + "%";
+  }
+
+  slider.addEventListener("input", () => render(parseInt(slider.value, 10)));
+  jumpBtn.addEventListener("click", () => {
+    slider.value = optimalIndex;
+    render(optimalIndex);
+  });
+
+  render(optimalIndex);
+})();
+</script>
+
 </body>
 </html>
