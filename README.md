@@ -3,6 +3,9 @@
 [![Tests](https://github.com/Charith-Reddy-Pareddy/Cost-Sensitive-Fraud-Detection-with-Threshold-Optimization/actions/workflows/tests.yml/badge.svg)](https://github.com/Charith-Reddy-Pareddy/Cost-Sensitive-Fraud-Detection-with-Threshold-Optimization/actions/workflows/tests.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
+**[Live dashboard →](https://charith-reddy-pareddy.github.io/Cost-Sensitive-Fraud-Detection-with-Threshold-Optimization/)**
+— headline metrics, confusion matrix, ROC/PR curves, and every robustness finding in one page.
+
 Fraud detection isn't an accuracy-maximization problem — missing a fraudulent transaction and
 blocking a legitimate customer cost different amounts. This project optimizes the decision
 threshold against a cost function instead of 0.5, then asks the harder question: **how robust is
