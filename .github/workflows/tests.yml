@@ -10,17 +10,6 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
-    services:
-      redis:
-        image: redis:7-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
     steps:
       - uses: actions/checkout@v4
 
@@ -32,5 +21,49 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Start redis (used by both pytest and the serving containers below)
+        run: docker compose up -d redis
+
       - name: Run tests
         run: pytest tests/ -q
+
+      - name: Generate CI-only fixture data and model artifacts
+        run: python -m scripts.generate_ci_fixtures
+
+      - name: Build serving images
+        run: docker compose build api sparkov-api
+
+      - name: Start serving images
+        run: docker compose up -d api sparkov-api
+
+      - name: Wait for services to become healthy
+        run: |
+          for i in $(seq 1 30); do
+            api_ok=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8000/health || true)
+            sparkov_ok=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8001/health || true)
+            if [ "$api_ok" = "200" ] && [ "$sparkov_ok" = "200" ]; then exit 0; fi
+            sleep 2
+          done
+          echo "services did not become healthy in time"
+          docker compose logs
+          exit 1
+
+      - name: Smoke-test /predict on both services
+        run: |
+          curl -sf -X POST localhost:8000/predict -H "Content-Type: application/json" -d '{
+            "Time": 0, "V1": 0.5, "V2": 0.1, "V3": -0.2, "V4": 0.3, "V5": -0.1,
+            "V6": 0.2, "V7": -0.3, "V8": 0.1, "V9": -0.2, "V10": 0.4, "V11": -0.1,
+            "V12": 0.2, "V13": -0.3, "V14": 0.1, "V15": -0.2, "V16": 0.3, "V17": -0.1,
+            "V18": 0.2, "V19": -0.3, "V20": 0.1, "V21": -0.2, "V22": 0.3, "V23": -0.1,
+            "V24": 0.2, "V25": -0.3, "V26": 0.1, "V27": -0.2, "V28": 0.3, "Amount": 50.0
+          }'
+          curl -sf -X POST localhost:8001/predict -H "Content-Type: application/json" -d '{
+            "cc_num": "CI_TEST", "trans_date_trans_time": "2020-06-15 14:30:00",
+            "dob": "1985-03-20", "amt": 250.0, "lat": 40.0, "long": -74.0,
+            "merch_lat": 41.0, "merch_long": -75.0, "city_pop": 20000,
+            "gender": "F", "category": "grocery_pos"
+          }'
+
+      - name: Tear down
+        if: always()
+        run: docker compose down
