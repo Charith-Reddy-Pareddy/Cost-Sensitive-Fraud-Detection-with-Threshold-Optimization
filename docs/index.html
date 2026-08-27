@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cost-Sensitive Fraud Detection — Dashboard</title>
+<style>
+  :root {
+    --bg: #0b0f17;
+    --panel: #131a26;
+    --panel-border: #232c3d;
+    --text: #e7ecf3;
+    --text-dim: #93a1b7;
+    --accent: #5aa9ff;
+    --good: #3ecf8e;
+    --bad: #ff6b6b;
+    --warn: #f5b942;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.55;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 40px 24px 80px; }
+  header { margin-bottom: 36px; }
+  h1 { font-size: 1.9rem; margin: 0 0 8px; }
+  .tagline { color: var(--text-dim); max-width: 760px; margin: 0 0 16px; }
+  .links a {
+    color: var(--accent); text-decoration: none; margin-right: 18px; font-size: 0.92rem;
+  }
+  .links a:hover { text-decoration: underline; }
+
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 14px;
+    margin: 28px 0 8px;
+  }
+  .stat {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+    padding: 16px 18px;
+  }
+  .stat .label { color: var(--text-dim); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; }
+  .stat .value { font-size: 1.5rem; font-weight: 650; margin-top: 4px; }
+  .stat .sub { color: var(--text-dim); font-size: 0.82rem; margin-top: 2px; }
+  .stat.bad .value { color: var(--bad); }
+  .stat.good .value { color: var(--good); }
+
+  section { margin-top: 52px; }
+  h2 { font-size: 1.25rem; border-bottom: 1px solid var(--panel-border); padding-bottom: 10px; }
+  p.note { color: var(--text-dim); font-size: 0.94rem; }
+
+  .fig-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+    margin: 18px 0;
+  }
+  .fig {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+    padding: 10px;
+  }
+  .fig img { width: 100%; display: block; border-radius: 6px; }
+  .fig figcaption { color: var(--text-dim); font-size: 0.82rem; margin-top: 8px; text-align: center; }
+
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.9rem; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--panel-border); }
+  th { color: var(--text-dim); font-weight: 600; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.03em; }
+  tr:last-child td { border-bottom: none; }
+  .pos { color: var(--good); }
+  .neg { color: var(--bad); }
+
+  .verdict {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-left: 3px solid var(--warn);
+    border-radius: 8px;
+    padding: 16px 18px;
+    margin: 18px 0;
+    font-size: 0.95rem;
+  }
+
+  footer {
+    margin-top: 64px;
+    padding-top: 20px;
+    border-top: 1px solid var(--panel-border);
+    color: var(--text-dim);
+    font-size: 0.85rem;
+  }
+  footer a { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>Cost-Sensitive Fraud Detection with Threshold Optimization</h1>
+  <p class="tagline">
+    How robust is optimizing the fraud decision threshold against a cost function — not just
+    whether it beats 0.5 on one test split, but across time windows, cost-ratio uncertainty,
+    and a second, structurally different dataset.
+  </p>
+  <div class="links">
+    <a href="https://github.com/Charith-Reddy-Pareddy/Cost-Sensitive-Fraud-Detection-with-Threshold-Optimization">GitHub repo</a>
+    <a href="https://github.com/Charith-Reddy-Pareddy/Cost-Sensitive-Fraud-Detection-with-Threshold-Optimization#readme">README</a>
+    <a href="https://github.com/Charith-Reddy-Pareddy/Cost-Sensitive-Fraud-Detection-with-Threshold-Optimization/blob/main/RESEARCH_REPORT.md">Full research report</a>
+  </div>
+</header>
+
+<div class="stat-grid">
+  <div class="stat"><div class="label">Best model</div><div class="value">XGBoost</div><div class="sub">class-weighted</div></div>
+  <div class="stat"><div class="label">Cost-optimal threshold</div><div class="value">0.09</div><div class="sub">selected on validation</div></div>
+  <div class="stat good"><div class="label">Cost reduction vs. default</div><div class="value">2.4%</div><div class="sub">95% CI: −9.3% to 18.7%</div></div>
+  <div class="stat"><div class="label">Beat default, walk-forward</div><div class="value">2 / 4</div><div class="sub">time windows</div></div>
+  <div class="stat bad"><div class="label">Replicates on Sparkov?</div><div class="value">No</div><div class="sub">external validation</div></div>
+  <div class="stat good"><div class="label">Inference latency</div><div class="value">1.42ms</div><div class="sub">p50 · 2.14ms p95</div></div>
+</div>
+<p class="note">
+  This is deliberately the honest table, not the flattering one — see the verdict boxes below.
+</p>
+
+<section>
+  <h2>How the model detects fraud</h2>
+  <p class="note">
+    Production model (class-weighted XGBoost @ 0.09), real untouched test set — 42,721
+    transactions, 52 fraud (0.17%). Accuracy alone is meaningless here: predicting "not fraud"
+    every time scores 99.8%.
+  </p>
+  <div class="fig-row">
+    <figure class="fig"><img src="figures/confusion_matrix.png" alt="Confusion matrix"><figcaption>40 of 52 fraud caught, 83 false alarms out of 42,669 legitimate</figcaption></figure>
+    <figure class="fig"><img src="figures/roc_curve.png" alt="ROC curve"><figcaption>ROC-AUC 0.983</figcaption></figure>
+    <figure class="fig"><img src="figures/pr_curve.png" alt="Precision-recall curve"><figcaption>PR-AUC 0.758 — the metric that actually matters at this imbalance</figcaption></figure>
+  </div>
+  <div class="verdict">
+    ROC-AUC looks uniformly excellent even for a mediocre model here, because true negatives are
+    so abundant they flood the false-positive-rate axis. PR-AUC is far more sensitive to what
+    happens at realistic operating thresholds — notice its chance line sits at 0.0012, essentially
+    on the floor.
+  </div>
+</section>
+
+<section>
+  <h2>Cost-sensitive threshold optimization</h2>
+  <p class="note">
+    $500 per missed fraud, $5 per blocked legitimate transaction — illustrative, not sourced.
+    Threshold selected on validation, cost reported on the untouched test set.
+  </p>
+  <div class="fig-row">
+    <figure class="fig"><img src="figures/cost_vs_threshold.png" alt="Cost vs threshold"><figcaption>Default (0.50): $6,575 · optimized (0.09): $6,415</figcaption></figure>
+    <figure class="fig"><img src="figures/cost_ratio_sensitivity.png" alt="Cost ratio sensitivity"><figcaption>Optimal threshold moves from 0.87 to 0.01 as the cost ratio sweeps 1→500</figcaption></figure>
+  </div>
+</section>
+
+<section>
+  <h2>Is any of it robust?</h2>
+  <div class="fig-row">
+    <figure class="fig"><img src="figures/cost_uncertainty_threshold_distribution.png" alt="Cost uncertainty distribution"><figcaption>500 draws of cost_fn~U(100,1000), cost_fp~U(1,20) — median matches the point estimate, range is [0.01, 0.75]</figcaption></figure>
+  </div>
+  <table>
+    <tr><th>Check</th><th>Result</th></tr>
+    <tr><td>Walk-forward (4 time windows)</td><td>optimized threshold beat default in <strong>2 / 4</strong> folds; threshold itself swung 0.04 → 0.62</td></tr>
+    <tr><td>Bootstrap (1,000 resamples)</td><td>cost reduction 2.4%, 95% CI <strong class="neg">[−9.3%, 18.7%]</strong> — crosses zero</td></tr>
+    <tr><td>Cost-ratio uncertainty (500 draws)</td><td>median 0.09 matches the point estimate, but range is [0.01, 0.75]</td></tr>
+  </table>
+  <div class="verdict">
+    Cost-sensitive threshold optimization has a positive expected effect here, but it is not a
+    reliably-winning intervention on a 492-fraud-row dataset. That's the honest read, not a
+    hedge.
+  </div>
+</section>
+
+<section>
+  <h2>What drives the prediction</h2>
+  <div class="fig-row">
+    <figure class="fig"><img src="figures/shap_summary.png" alt="SHAP feature importance"><figcaption>V4, V14, V12 — the strongest drivers (SHAP), consistent with published analyses of this dataset</figcaption></figure>
+  </div>
+</section>
+
+<section>
+  <h2>Does any of this generalize? — external validation on Sparkov</h2>
+  <p class="note">
+    Same protocol and costs, applied to a structurally different dataset (881,739 rows, 4,989
+    fraud, real merchant/category/geolocation fields instead of anonymized PCA components).
+  </p>
+  <table>
+    <tr><th></th><th>Primary</th><th>Sparkov</th></tr>
+    <tr><td>Baseline PR-AUC</td><td>0.757</td><td><strong>0.969</strong> (with per-card velocity feature)</td></tr>
+    <tr><td>Class weighting</td><td class="pos">helps marginally</td><td class="neg">hurts (0.909 → 0.882)</td></tr>
+    <tr><td>Threshold optimization</td><td class="pos">+2.4% cost reduction</td><td class="neg">−1.8% (worse)</td></tr>
+    <tr><td>Walk-forward beats default</td><td>2 / 4 folds</td><td>1 / 4 folds</td></tr>
+  </table>
+  <div class="verdict">
+    Neither primary-dataset conclusion replicates — and the disagreement gets <em>stronger</em>
+    once a real per-card feature is added. Likely reason: Sparkov's engineered features already
+    separate classes almost perfectly, leaving little room for cost-sensitive machinery to help.
+    That's not a failure of the method; it's evidence the method's value is concentrated where the
+    raw signal is weak.
+  </div>
+</section>
+
+<section>
+  <h2>Inference latency</h2>
+  <div class="fig-row">
+    <figure class="fig"><img src="figures/latency_histogram.png" alt="Latency histogram"><figcaption>5,000 real served predictions — p50 1.42ms, p95 2.14ms</figcaption></figure>
+  </div>
+</section>
+
+<footer>
+  Every number on this page came from actually running the scripts in the repo against the real
+  trained model — nothing here is illustrative or hand-picked. Full methodology, all five
+  robustness experiments, and the external-validation breakdown:
+  <a href="https://github.com/Charith-Reddy-Pareddy/Cost-Sensitive-Fraud-Detection-with-Threshold-Optimization/blob/main/RESEARCH_REPORT.md">RESEARCH_REPORT.md</a>.
+</footer>
+
+</div>
+</body>
+</html>
