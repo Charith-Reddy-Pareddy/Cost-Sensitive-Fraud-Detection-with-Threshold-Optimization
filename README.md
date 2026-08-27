@@ -9,6 +9,12 @@ threshold against a cost function instead of 0.5, then asks the harder question:
 that improvement**, once checked against a held-out validation split, across time windows, under
 cost-ratio uncertainty, and on a second, structurally different dataset?
 
+**Core research question:** which modeling approach performs best under severe class imbalance,
+and how does optimizing the decision threshold against a cost function change the tradeoff
+between fraud detection and false positives — including how robust that optimum is under
+temporal shift, cost-ratio uncertainty, and across datasets, not just whether it beats 0.5 on
+one test split?
+
 **Full writeup with every experiment: [`RESEARCH_REPORT.md`](RESEARCH_REPORT.md).** This README
 is the short version.
 
