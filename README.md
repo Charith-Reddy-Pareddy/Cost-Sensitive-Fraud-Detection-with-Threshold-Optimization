@@ -496,6 +496,25 @@ adding threshold tuning on top doesn't help here either. Every Sparkov robustnes
 agrees in direction with its primary-dataset counterpart, even where the magnitudes differ
 substantially.
 
+### Is the Sparkov threshold sensitive to cost uncertainty too?
+
+[Cost uncertainty](#cost-uncertainty-is-the-threshold-robust-to-the-assumed-cost-ratio) above,
+repeated on Sparkov
+([`src/models/run_sparkov_cost_uncertainty_analysis.py`](src/models/run_sparkov_cost_uncertainty_analysis.py)):
+
+![Sparkov cost uncertainty threshold distribution](reports/figures/sparkov_cost_uncertainty_threshold_distribution.png)
+
+| Statistic | Primary dataset | Sparkov |
+|---|---|---|
+| Median | 0.090 | 0.600 |
+| Range | [0.01, 0.75] | [0.11, 0.87] |
+
+The *shape* of the sensitivity differs, not just the number: the primary dataset's threshold
+swings toward the aggressive end (near 0) as costs vary, while Sparkov's stays anchored around
+0.5–0.7 across nearly every draw — a near-perfect model has much less to gain from moving the
+threshold at all. All five Sparkov robustness checks now point the same direction. Full
+discussion: [`RESEARCH_REPORT.md`](RESEARCH_REPORT.md#5d-is-the-sparkov-threshold-also-sensitive-to-cost-ratio-uncertainty).
+
 ## Inference service
 
 A FastAPI service (`src/serving/app.py`) loads the persisted production pipeline — the
@@ -643,6 +662,7 @@ python -m src.models.run_sparkov_validation
 python -m src.models.run_sparkov_bootstrap_analysis
 python -m src.models.run_sparkov_temporal_evaluation
 python -m src.models.run_sparkov_training_objective_comparison
+python -m src.models.run_sparkov_cost_uncertainty_analysis
 python -m src.streaming.run_sparkov_streaming_demo  # needs redis running (docker compose up -d redis)
 python -m src.models.train_sparkov_production_model
 # then either: uvicorn src.serving.sparkov_app:app --port 8001

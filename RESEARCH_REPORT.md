@@ -222,6 +222,28 @@ with a threshold additionally tuned on top of it.) Combined with Experiment 5a, 
 robustness check now agrees with its primary-dataset counterpart in direction, even where the
 magnitudes differ substantially.
 
+#### 5d. Is the Sparkov threshold also sensitive to cost-ratio uncertainty?
+
+Experiment 3, repeated on Sparkov with the velocity feature — 500 independent
+`cost_fn ~ Uniform(100, 1000)`, `cost_fp ~ Uniform(1, 20)` draws, threshold selected on val each
+time ([`src/models/run_sparkov_cost_uncertainty_analysis.py`](src/models/run_sparkov_cost_uncertainty_analysis.py)):
+
+![Sparkov cost uncertainty threshold distribution](reports/figures/sparkov_cost_uncertainty_threshold_distribution.png)
+
+| Statistic | Primary dataset | Sparkov |
+|---|---|---|
+| Mean | 0.151 | 0.606 |
+| Median | 0.090 | 0.600 |
+| Range | [0.010, 0.750] | [0.110, 0.870] |
+
+**The character of the sensitivity is genuinely different, not just the numbers.** On the
+primary dataset the threshold swings toward the aggressive end (near 0) as costs vary — a weak
+model needs a low bar to catch fraud at all. On Sparkov it stays anchored in the 0.5–0.7 range
+across nearly every draw — consistent with Experiments 5a–5c: a near-perfect model (PR-AUC
+0.969) has much less to gain from moving the threshold around, regardless of the assumed cost
+ratio. All five Sparkov robustness checks now point the same direction: the stronger the raw
+signal, the less any of this cost-sensitive machinery has left to contribute.
+
 ## Statistical analysis
 
 Fraud is 0.17% of the primary test split (52 of 42,721 rows) — not much to draw firm conclusions
@@ -264,5 +286,3 @@ intervention** — its benefit is real on average but small relative to the nois
 - Multi-day data to test genuine concept drift, not just intra-day window stability.
 - A theoretically motivated cost-sensitive objective (e.g., a custom asymmetric loss function
   rather than sample-weighting) as a fifth training-objective configuration.
-- Repeat the cost-uncertainty sweep (Experiment 3) on Sparkov — only walk-forward, bootstrap, and
-  the training-objective comparison have been repeated there so far (Experiments 5a–5c).
