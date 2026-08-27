@@ -94,6 +94,25 @@ cost-sensitivity partially substitute for each other, not add). Isotonic calibra
 both Brier score and cost; Platt scaling improves Brier but still costs more. Full discussion:
 [`RESEARCH_REPORT.md`](RESEARCH_REPORT.md#experiments).
 
+### How the production model detects fraud
+
+The production pipeline (class-weighted XGBoost @ threshold 0.09) on the real, untouched test
+set (42,721 rows, 52 fraud) — accuracy alone is meaningless at this imbalance (99.8% accuracy is
+achievable by predicting "not fraud" every time), so this is confusion matrix, ROC, and
+precision-recall, not a single accuracy number
+([`src/models/run_evaluation_plots.py`](src/models/run_evaluation_plots.py)):
+
+<img src="reports/figures/confusion_matrix.png" width="360" alt="Confusion matrix">
+<img src="reports/figures/roc_curve.png" width="420" alt="ROC curve">
+<img src="reports/figures/pr_curve.png" width="420" alt="Precision-recall curve">
+
+**40 of 52 fraud cases caught (recall 0.77), 83 false alarms out of 42,669 legitimate
+transactions (precision 0.33), ROC-AUC 0.983, PR-AUC 0.758.** The PR curve's chance line
+(fraud rate 0.0012) is the point of showing it at all: ROC-AUC looks uniformly excellent even
+for a mediocre model here, because true negatives are so abundant they flood the false-positive
+rate axis — PR-AUC is far more sensitive to what actually happens at realistic operating
+thresholds, which is why it's the metric used for model selection throughout this project.
+
 ### Cost-sensitive threshold optimization
 
 ![Expected cost vs. decision threshold](reports/figures/cost_vs_threshold.png)
