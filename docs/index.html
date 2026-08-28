@@ -230,6 +230,26 @@
     <figure class="fig"><img src="figures/cost_vs_threshold.png" alt="Cost vs threshold"><figcaption>Default (0.50): $6,575 · optimized (0.09): $6,415</figcaption></figure>
     <figure class="fig"><img src="figures/cost_ratio_sensitivity.png" alt="Cost ratio sensitivity"><figcaption>Optimal threshold moves from 0.87 to 0.01 as the cost ratio sweeps 1→500</figcaption></figure>
   </div>
+
+  <p class="note">
+    Try the other axis: as missing fraud gets relatively more expensive than a false alarm, the
+    optimal threshold falls (selected on validation) and its effect on test changes with it.
+  </p>
+  <div class="explorer">
+    <div class="explorer-readout">
+      <div class="stat"><div class="label">Cost ratio (FN / FP)</div><div class="value" id="cr-ratio">100</div></div>
+      <div class="stat"><div class="label">Optimal threshold</div><div class="value" id="cr-threshold">—</div></div>
+      <div class="stat"><div class="label">Precision</div><div class="value" id="cr-precision">—</div></div>
+      <div class="stat"><div class="label">Recall</div><div class="value" id="cr-recall">—</div></div>
+      <div class="stat"><div class="label">False positive rate</div><div class="value" id="cr-fpr">—</div></div>
+      <div class="stat good"><div class="label">Expected cost</div><div class="value" id="cr-cost">—</div></div>
+    </div>
+    <input type="range" id="cr-slider" min="0" max="49" step="1" value="36" class="explorer-slider">
+    <div class="explorer-bars">
+      <div class="bar-row"><span>Precision</span><div class="bar-track"><div class="bar-fill" id="cr-precision-bar"></div></div></div>
+      <div class="bar-row"><span>Recall</span><div class="bar-track"><div class="bar-fill recall" id="cr-recall-bar"></div></div></div>
+    </div>
+  </div>
 </section>
 
 <section>
@@ -342,6 +362,45 @@
   });
 
   render(optimalIndex);
+})();
+
+(async function () {
+  const slider = document.getElementById("cr-slider");
+  const els = {
+    ratio: document.getElementById("cr-ratio"),
+    threshold: document.getElementById("cr-threshold"),
+    precision: document.getElementById("cr-precision"),
+    recall: document.getElementById("cr-recall"),
+    fpr: document.getElementById("cr-fpr"),
+    cost: document.getElementById("cr-cost"),
+    precisionBar: document.getElementById("cr-precision-bar"),
+    recallBar: document.getElementById("cr-recall-bar"),
+  };
+
+  let data;
+  try {
+    const res = await fetch("cost_ratio_sweep_data.json");
+    data = await res.json();
+  } catch (e) {
+    els.ratio.textContent = "n/a";
+    return;
+  }
+
+  function render(index) {
+    const row = data.sweep[index];
+    els.ratio.textContent = Math.round(row.ratio);
+    els.threshold.textContent = row.threshold.toFixed(2);
+    els.precision.textContent = row.precision.toFixed(3);
+    els.recall.textContent = row.recall.toFixed(3);
+    els.fpr.textContent = row.fpr.toFixed(4);
+    els.cost.textContent = "$" + row.cost.toLocaleString();
+    els.precisionBar.style.width = (row.precision * 100) + "%";
+    els.recallBar.style.width = (row.recall * 100) + "%";
+  }
+
+  slider.max = data.sweep.length - 1;
+  slider.addEventListener("input", () => render(parseInt(slider.value, 10)));
+  render(parseInt(slider.value, 10));
 })();
 </script>
 
