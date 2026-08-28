@@ -1,0 +1,11 @@
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+exclude = [".venv", "data", "models", "mlruns", "reports", "notebooks"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP"]
+ignore = ["E501"]  # line length handled by formatter/line-length above, not worth blocking on
+
+[tool.ruff.lint.isort]
+known-first-party = ["src"]

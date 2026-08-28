@@ -19,7 +19,10 @@ jobs:
           cache: "pip"
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: pip install -r requirements.txt ruff
+
+      - name: Lint
+        run: ruff check .
 
       - name: Start redis (used by both pytest and the serving containers below)
         run: docker compose up -d redis
