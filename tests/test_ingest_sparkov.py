@@ -1,6 +1,13 @@
 import pandas as pd
 
-from src.data.ingest_sparkov import FEATURE_COLUMNS, STATIC_FEATURE_COLUMNS, VELOCITY_FEATURE_COLUMNS, _haversine_km, engineer_features, raw_row_to_static_features
+from src.data.ingest_sparkov import (
+    FEATURE_COLUMNS,
+    STATIC_FEATURE_COLUMNS,
+    VELOCITY_FEATURE_COLUMNS,
+    _haversine_km,
+    engineer_features,
+    raw_row_to_static_features,
+)
 
 
 def test_haversine_zero_distance_for_same_point():

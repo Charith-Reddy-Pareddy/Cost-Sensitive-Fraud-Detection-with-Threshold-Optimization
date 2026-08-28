@@ -8,12 +8,11 @@ recording its latency. `/latency` reports p50/p95 over everything scored so far.
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Optional
 
 import pandas as pd
 from fastapi import FastAPI
 
-from src.features.pipeline import RAW_FEATURE_COLUMNS, TARGET_COLUMN
+from src.features.pipeline import RAW_FEATURE_COLUMNS
 from src.serving.latency_tracker import LatencyTracker
 from src.serving.model_loader import load_production_pipeline
 from src.serving.schemas import PredictionResponse, TransactionRequest
@@ -70,7 +69,7 @@ def predict(transaction: TransactionRequest):
 
 
 @app.post("/replay")
-def replay(n: int = 100, delay_ms: float = 5.0, seed: Optional[int] = None):
+def replay(n: int = 100, delay_ms: float = 5.0, seed: int | None = None):
     test_df = state["test_df"]
     if test_df is None:
         return {"error": "test set not available"}

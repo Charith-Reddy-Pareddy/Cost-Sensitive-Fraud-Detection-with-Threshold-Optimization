@@ -13,7 +13,13 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from xgboost import XGBClassifier
 
-from src.data.ingest_sparkov import FEATURE_COLUMNS, TARGET_COLUMN, engineer_features, load_raw, raw_row_to_static_features
+from src.data.ingest_sparkov import (
+    FEATURE_COLUMNS,
+    TARGET_COLUMN,
+    engineer_features,
+    load_raw,
+    raw_row_to_static_features,
+)
 from src.streaming.redis_features_sparkov import card_velocity_features, get_redis_client
 
 N_REPLAY_ROWS = 5000
