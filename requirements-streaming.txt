@@ -1,5 +1,5 @@
-pandas
-pyarrow
-confluent-kafka
-redis
-httpx
+pandas==2.3.3
+pyarrow==25.0.1
+confluent-kafka==2.15.0
+redis==8.1.0
+httpx==0.28.1
