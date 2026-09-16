@@ -174,6 +174,14 @@ Same protocol and costs, applied to Sparkov
 **Neither primary-dataset conclusion replicates**, and the disagreement gets *stronger* with a
 real per-card feature (`card_txn_count_24h`, causally windowed via Redis — added because
 Sparkov's `cc_num` makes a genuine per-entity feature possible, unlike the primary dataset).
+
+*Why* cost-weighted training beats tuning: its raw Brier score is measurably worse than standard
+training's (0.00045 vs. 0.00040) — the cost-weighted objective trades calibration for
+cost-awareness rather than getting both for free — and every explicitly threshold-tuned
+configuration tested, including the cost-weighted model tuned against its own scores, costs more
+on test than cost-weighted training's untouched default decision. Threshold tuning on top
+appears to double-count the cost asymmetry rather than add to it. Full mechanism study:
+[`RESEARCH_REPORT.md §4b`](RESEARCH_REPORT.md#4b-why-does-combining-them-hurt-a-calibration-explanation).
 Likely reason: Sparkov's engineered features already separate classes almost perfectly, leaving
 little room for cost-sensitive machinery to help. Every Sparkov robustness check agrees in
 direction with itself even as it disagrees with the primary dataset. Full breakdown of all 4

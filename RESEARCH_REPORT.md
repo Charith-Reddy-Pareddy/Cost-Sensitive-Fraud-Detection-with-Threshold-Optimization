@@ -162,11 +162,60 @@ class weighting (which only encodes class *frequency*, not the actual dollar fig
 **C beats both B and D.** Cost-weighted training alone, at the plain default threshold, does
 better than either decision-time threshold tuning alone or the two combined. Combining
 training-time and decision-time cost-sensitivity (D) is not simply additive — it's *worse* than
-cost-weighted training alone, because threshold selection on top of an already cost-shifted
-probability distribution is itself unstable (consistent with Experiments 2 and 3). This is the
-most interesting single result in this report: two cost-sensitivity mechanisms that sound
-complementary in principle turn out to partially substitute for, rather than reinforce, each
-other in practice.
+cost-weighted training alone. The mechanism behind that — not just that it happens, but why — is
+investigated directly next. This is the most interesting single result in this report: two
+cost-sensitivity mechanisms that sound complementary in principle turn out to partially
+substitute for, rather than reinforce, each other in practice.
+
+#### 4b. Why does combining them hurt? A calibration explanation
+
+The working hypothesis: cost-weighted training doesn't just shift where the decision boundary
+*should* be — it distorts the score away from being a calibrated P(fraud) estimate, because the
+fit is no longer optimizing to match observed frequencies, it's optimizing a cost-weighted
+objective instead. If true, applying threshold tuning *on top of* those already cost-shifted
+scores double-counts the cost asymmetry: once during training (via the sample weights) and again
+during threshold selection — each reasonable on its own, but their combination overshoots.
+[`run_calibration_mechanism_study.py`](src/models/run_calibration_mechanism_study.py) tests this
+against five configurations and the theoretical Bayes-optimal threshold:
+
+| Configuration | Brier (test) | Empirical threshold (val) | Gap to Bayes-optimal (0.0099) | Test cost |
+|---|---|---|---|---|
+| 1. Raw (standard training) | 0.00040 | 0.0053 | 0.0046 | $6,555 |
+| 2. Platt-calibrated (standard training) | 0.00047 | 0.0005 | 0.0094 | $6,555 |
+| 3. Isotonic-calibrated (standard training) | 0.00040 | 0.0256 | 0.0157 | $6,525 |
+| 4. Cost-weighted (uncalibrated) | 0.00045 | 0.0246 | 0.0147 | $6,945 |
+| 5. Cost-weighted + isotonic calibration | 0.00042 | 0.0196 | 0.0097 | $6,930 |
+
+The hypothesis holds up on two independent pieces of evidence:
+
+1. **Calibration quality itself is worse under cost-weighting.** Standard training's raw Brier
+   score is 0.00040; cost-weighted training's is 0.00045 — measurably worse, exactly as expected
+   if the cost-weighted objective trades calibration quality for cost-awareness rather than
+   getting both for free.
+2. **Every explicitly threshold-tuned configuration in this table — all five — costs more on
+   test than cost-weighted training's own untouched default-0.5 decision ($6,530, Experiment 4's
+   config C).** That includes the cost-weighted model tuned against its own validation scores
+   (row 4: $6,945, $415 worse than just leaving it at 0.5). If cost-weighted training's default
+   decision boundary is already close to cost-optimal for that distorted score space, further
+   tuning has nothing left to correct and instead fits validation-split noise — consistent with
+   double-counting, not with threshold tuning being independently useful on top.
+
+![Score distributions: standard vs. cost-weighted training](reports/figures/score_distributions_standard_vs_cost_weighted.png)
+![Reliability: standard vs. cost-weighted training](reports/figures/reliability_standard_vs_cost_weighted.png)
+![Cost surface: standard vs. cost-weighted training](reports/figures/cost_surface_standard_vs_cost_weighted.png)
+
+The cost surface plot makes the mechanism visible directly. Both curves still have their global
+minimum near threshold ≈0.01–0.02 — cost-weighting doesn't move *where* the optimum is — but away
+from that sharp minimum, cost-weighted training's curve sits much lower across the broad middle
+range: at threshold 0.5 standard training costs $8,000 on val versus cost-weighted training's
+$7,015, and between 0.3–0.4 cost-weighted training already reaches $6,030–$6,525 (within ~20% of
+its own $5,205 minimum) while standard training is still at $8,000–$8,015 (roughly 50% above its
+own $5,385 minimum) over that same range. Cost-weighted training has already absorbed much of the
+achievable benefit at moderate, less-extreme thresholds; standard training only captures it by
+tuning aggressively toward the sharp minimum near 0.01. That leaves cost-weighted training's
+*narrow* additional gain from further threshold tuning genuinely small relative to validation-
+split noise — real room to overfit that noise instead of capturing signal, exactly what the D < C
+result shows.
 
 ### 5. Does any of this generalize to a structurally different dataset?
 
