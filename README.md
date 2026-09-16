@@ -26,7 +26,7 @@ is the short version.
 | Best model | XGBoost (class-weighted) |
 | Cost-optimal threshold (val-selected, $500/$5 illustrative costs) | 0.09 |
 | Cost reduction vs. default (untouched test) | 2.4% (95% CI: −9.3% to 18.7%) |
-| Beat default across 4 walk-forward windows | 2 of 4 |
+| Walk-forward result (4 windows) | 1 improved, 1 tied, 2 worsened |
 | Replicates on a second dataset (Sparkov) | **No** |
 | Inference latency | 1.42ms p50 / 2.14ms p95 |
 
@@ -132,8 +132,8 @@ generalization gap, made visible on purpose.)
 
 ![Cost uncertainty threshold distribution](reports/figures/cost_uncertainty_threshold_distribution.png)
 
-- **Walk-forward (4 time windows):** optimized threshold beat default in only 2/4 folds; the
-  threshold itself swings from 0.04 to 0.62 across windows.
+- **Walk-forward (4 time windows):** optimized threshold improved cost in 1/4 folds, tied in
+  1/4, and made it worse in 2/4; the threshold itself swings from 0.04 to 0.62 across windows.
 - **Cost-ratio uncertainty (500 draws, cost_fn~U(100,1000), cost_fp~U(1,20)):** median threshold
   0.09 matches the point estimate, but the range is [0.01, 0.75].
 - **Bootstrap (1,000 resamples):** cost reduction 2.4%, 95% CI **[−9.3%, 18.7%]** — crosses zero.
@@ -160,7 +160,7 @@ Same protocol and costs, applied to Sparkov
 | Class weighting | helps marginally | **hurts** (0.909→0.882) | — |
 | Threshold optimization | +2.4% cost reduction | no effect (0%) | **−1.8%** (worse) |
 | Cost-reduction 95% CI | [−9.3%, 18.7%] | [0.0%, 0.0%] | [−9.1%, 1.5%] |
-| Walk-forward: beats default | 2/4 folds | 2/4 folds | **1/4 folds** |
+| Walk-forward: improved / tied / worsened | 1 / 1 / 2 | 2 / 0 / 2 | **1 / 0 / 3** |
 | Cost-weighted training beats tuning | yes | — | **yes** |
 | Cost-ratio-uncertainty median threshold | 0.09 | — | 0.60 (anchored, not swinging) |
 

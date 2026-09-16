@@ -8,8 +8,6 @@ on the second half.
 
 import numpy as np
 import pandas as pd
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler
 from xgboost import XGBClassifier
 
 from src.data.ingest_sparkov import TARGET_COLUMN, engineer_features, load_raw
@@ -18,11 +16,11 @@ from src.models.cost_engine import DEFAULT_COST_FALSE_NEGATIVE, DEFAULT_COST_FAL
 N_BLOCKS = 5
 
 
-def _build_pipeline(scale_pos_weight: float) -> Pipeline:
+def _build_pipeline(scale_pos_weight: float) -> XGBClassifier:
     classifier = XGBClassifier(
         n_estimators=200, max_depth=4, learning_rate=0.1, eval_metric="aucpr", n_jobs=-1, scale_pos_weight=scale_pos_weight
     )
-    return Pipeline(steps=[("scale", StandardScaler()), ("classifier", classifier)])
+    return classifier
 
 
 def _make_blocks(df: pd.DataFrame, n_blocks: int) -> list[pd.DataFrame]:
@@ -63,23 +61,30 @@ def main() -> None:
         optimal_cost = expected_cost(
             y_test, test_proba, sweep.optimal_threshold, DEFAULT_COST_FALSE_NEGATIVE, DEFAULT_COST_FALSE_POSITIVE
         )
-        beats_default = optimal_cost <= default_cost
+        if optimal_cost < default_cost:
+            result = "improved"
+        elif optimal_cost == default_cost:
+            result = "tied"
+        else:
+            result = "worsened"
 
-        rows.append((k, len(train_df), sweep.optimal_threshold, default_cost, optimal_cost, "beats" if beats_default else "worse"))
+        rows.append((k, len(train_df), sweep.optimal_threshold, default_cost, optimal_cost, result))
 
     print("| Fold | Train rows | Threshold (val) | Default cost (test) | Optimized cost (test) | Result |")
     print("|---|---|---|---|---|---|")
     n_valid = 0
-    n_beats = 0
+    n_improved = n_tied = n_worsened = 0
     for k, n_train, threshold, default_cost, optimal_cost, result in rows:
         if threshold is None:
             print(f"| {k} | {n_train} | — | — | — | {result} |")
             continue
         n_valid += 1
-        n_beats += result == "beats"
+        n_improved += result == "improved"
+        n_tied += result == "tied"
+        n_worsened += result == "worsened"
         print(f"| {k} | {n_train} | {threshold:.2f} | ${default_cost:,.2f} | ${optimal_cost:,.2f} | {result} |")
 
-    print(f"\noptimized threshold beat default in {n_beats}/{n_valid} valid folds")
+    print(f"\noptimized threshold: improved {n_improved}/{n_valid}, tied {n_tied}/{n_valid}, worsened {n_worsened}/{n_valid} valid folds")
 
 
 if __name__ == "__main__":

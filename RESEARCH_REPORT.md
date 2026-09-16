@@ -59,16 +59,19 @@ second half — so training data only ever grows forward in time.
 
 | Fold | Train rows | Threshold (val) | Default cost (test) | Optimized cost (test) | Result |
 |---|---|---|---|---|---|
-| 1 | 56,961 | 0.04 | $4,520 | $4,340 | beats |
-| 2 | 113,922 | 0.62 | $5,180 | $5,665 | worse |
-| 3 | 170,884 | 0.56 | $4,015 | $4,015 | tie (beats) |
-| 4 | 227,845 | 0.05 | $3,060 | $3,840 | worse |
+| 1 | 56,961 | 0.04 | $4,520 | $4,340 | improved |
+| 2 | 113,922 | 0.62 | $5,180 | $5,665 | worsened |
+| 3 | 170,884 | 0.56 | $4,015 | $4,015 | tied |
+| 4 | 227,845 | 0.05 | $3,060 | $3,840 | worsened |
 
-**The optimized threshold beat the default in only 2 of 4 folds**, and the selected threshold
-itself swings from 0.04 to 0.62 across windows. This dataset covers a single day, so it cannot
-test genuine multi-day concept drift — that limitation is real and unavoidable here — but it
-does show the conclusion is not stable even across different windows of a single day. A
-single-split result (Experiment 1) looked like a clean win; four splits show a coin flip.
+**The optimized threshold improved cost in 1 of 4 folds, tied in 1, and made it worse in the
+other 2** — an earlier version of this report collapsed the tied fold into "beats" (`<=`
+comparison) and reported "2 of 4," which overstates how often the optimized threshold actually
+did better than default; a tie is not a win. The selected threshold itself swings from 0.04 to
+0.62 across windows. This dataset covers a single day, so it cannot test genuine multi-day
+concept drift — that limitation is real and unavoidable here — but it does show the conclusion
+is not stable even across different windows of a single day. A single-split result
+(Experiment 1) looked like a clean win; four splits show, at best, a coin flip.
 
 ### 3. Is the selected threshold robust to uncertainty in the assumed cost ratio?
 
@@ -156,7 +159,7 @@ bootstrap checks from Experiments 2–3, this time on Sparkov:
 | Baseline PR-AUC (no weighting) | 0.909 | **0.969** |
 | Threshold optimization vs. default (single split) | 0% reduction | **−1.8%** (actively worse) |
 | Cost-reduction 95% bootstrap CI | [0.0%, 0.0%] | [−9.1%, 1.5%] |
-| Walk-forward: optimized beats default | 2 of 4 folds | **1 of 4 folds** |
+| Walk-forward: improved / tied / worsened | 2 / 0 / 2 | **1 / 0 / 3** |
 
 The velocity feature is a genuinely strong signal — it pushes an already-strong baseline from
 0.909 to 0.969 PR-AUC — and it makes the "threshold optimization doesn't help here" finding
@@ -258,8 +261,8 @@ val-selected threshold's test-set predictions:
 | Expected cost @ 0.09 | $6,415 | [$3,390, $9,935] |
 | Cost reduction vs. default | 2.4% | [−9.3%, 18.7%] |
 
-The cost-reduction interval crosses zero. Combined with the walk-forward result (2 of 4 folds)
-and the cost-uncertainty spread, the honest summary is: **on this dataset, cost-sensitive
+The cost-reduction interval crosses zero. Combined with the walk-forward result (1 improved,
+1 tied, 2 worsened, of 4 folds) and the cost-uncertainty spread, the honest summary is: **on this dataset, cost-sensitive
 threshold optimization has a positive expected effect but is not a reliably-winning
 intervention** — its benefit is real on average but small relative to the noise in a
 492-fraud-row dataset.
