@@ -160,6 +160,17 @@ threshold"), ranking by raw fraud probability and ranking by expected dollar los
 more individual fraud cases, the other catches more fraud dollars with far fewer cases. Full
 breakdown: [`RESEARCH_REPORT.md §6`](RESEARCH_REPORT.md#6-what-changes-under-amount-proportional-costs-and-a-fixed-review-capacity).
 
+### Does this generalize beyond XGBoost?
+
+Two more model families — Balanced Random Forest (bagging) and isotonic-calibrated logistic
+regression (linear) — also find a real, positive cost reduction from threshold optimization, and
+on both it's considerably *larger* than XGBoost's (+6.84% and **+38.33%** vs. +5.17%). A third
+family, LightGBM, was tried and excluded after real investigation: it produced a genuine,
+reproducible anomaly on this specific dataset (PR-AUC ≈0.02-0.05 vs. XGBoost's 0.82 under
+identical no-weighting conditions) that wasn't present on synthetic data at a matched imbalance
+ratio, and several targeted fixes didn't resolve it — documented rather than hidden. Details:
+[`RESEARCH_REPORT.md §7`](RESEARCH_REPORT.md#7-is-any-of-this-xgboost-specific).
+
 ### Interpretability
 
 ![Top 10 SHAP features](reports/figures/shap_summary.png)

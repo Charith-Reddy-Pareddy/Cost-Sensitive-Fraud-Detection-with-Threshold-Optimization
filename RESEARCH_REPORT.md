@@ -467,6 +467,50 @@ report cannot answer for the reader: minimizing total dollar loss and minimizing
 customers who experience fraud are different objectives, and this table is the first place in the
 project where that distinction has real, measurable teeth.
 
+### 7. Is any of this XGBoost-specific?
+
+Every experiment so far uses one model. Two additional, deliberately different families —
+bagging (Balanced Random Forest) and a linear model (isotonic-calibrated logistic regression) —
+test whether "cost-sensitive threshold optimization has a real but modest benefit" is a property
+of the method or an artifact of XGBoost specifically
+([`run_baseline_model_comparison.py`](src/models/run_baseline_model_comparison.py); same
+train→val-select→test-report protocol, exact threshold search):
+
+| Model | PR-AUC (test) | Brier (test) | Threshold (val) | Test cost reduction vs. default |
+|---|---|---|---|---|
+| XGBoost (class-weighted) | 0.758 | 0.00061 | 0.0197 | +5.17% |
+| Balanced Random Forest | 0.767 | 0.01826 | 0.5380 | +6.84% |
+| Calibrated logistic regression | 0.711 | 0.00049 | 0.0105 | **+38.33%** |
+
+**The core finding generalizes, and on two of three model families it's considerably stronger
+than the XGBoost result this whole report is built around.** All three models find a real,
+positive cost reduction from threshold optimization — this isn't an XGBoost artifact. The
+magnitude varies a lot, though, and the calibrated logistic regression result is the most
+striking: 38% versus XGBoost's 5%, even though its PR-AUC (0.711) is the *worst* of the three.
+That's a useful reminder that PR-AUC (ranking quality) and cost-reduction-from-thresholding
+(how much a bad default threshold was costing) are different properties — a weaker-ranking model
+can still have more room to gain from picking a better decision threshold than a
+stronger-ranking one does, exactly the model-discrimination-vs-decision-policy distinction this
+report treats as central. Balanced Random Forest's threshold (0.538) sits near 0.5 rather than
+near 0 like the other two — a direct consequence of the model itself: each tree in the forest
+already trains on an undersampled, class-*balanced* bootstrap, so its raw output is closer to a
+genuinely balanced-decision score before any cost-sensitive threshold gets applied on top,
+unlike XGBoost/logistic regression, which see the real, severely imbalanced class frequencies.
+
+**A third family, LightGBM, was tried and excluded.** Under identical preprocessing, and even
+with *no* class weighting applied to any of the three models, LightGBM scored PR-AUC ≈0.02-0.05
+on this dataset versus XGBoost's 0.82 in the same no-weighting condition — not a close call. This
+was investigated rather than dismissed: the same LightGBM configuration reaches PR-AUC 0.74-1.0
+on synthetic data at a matched 0.17% imbalance ratio, ruling out a broken install or an inherent
+inability to handle this level of imbalance. Several targeted fixes were tried and did not
+resolve it — `is_unbalance=True`, relaxed `min_child_samples`/`min_split_gain`, single-threaded
+execution, raw vs. `StandardScaler`-scaled features, and dropping the `Time`/`Amount` columns
+entirely. The anomaly appears specific to something about this dataset's actual PCA-transformed
+feature distributions interacting with LightGBM's histogram-based split-finding, and it was not
+resolved within the scope of this report. Reporting a broken number to hit a round "3 of 3"
+would be worse than documenting the gap honestly; this is flagged here, and in Future work, as
+unresolved rather than fixed.
+
 ## Statistical analysis
 
 Fraud is 0.17% of the primary test split (52 of 42,721 rows) — not much to draw firm conclusions
@@ -512,3 +556,6 @@ intervention** — its benefit is real on average but small relative to the nois
 - Re-run the bootstrap, walk-forward, and cost-ratio sweep with the exact threshold search
   (§1b) instead of the 101-point grid, to get a consistent, un-discretized basis for every
   reported number rather than only the headline comparison.
+- Diagnose the LightGBM anomaly from §7 (PR-AUC ≈0.02-0.05 on this dataset vs. 0.82 for
+  XGBoost under identical no-weighting conditions, not reproduced on synthetic data at a
+  matched imbalance ratio) rather than leaving it excluded.
