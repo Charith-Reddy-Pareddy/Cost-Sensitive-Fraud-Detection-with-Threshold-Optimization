@@ -63,6 +63,43 @@ actually the lowest-cost point on test — threshold 0.05 achieves a lower test 
 $6,415). That's not a bug; it's the val→test generalization gap made visible, exactly what a
 held-out test set is supposed to expose.
 
+#### 1b. Is the grid itself limiting the result?
+
+The 2.4% headline number, and every other threshold-based result in this report, selects the
+threshold from a fixed 101-point grid (`np.linspace(0, 1, 101)`, step 0.01). That's a
+discretization choice, not a property of the method — the true cost-minimizing threshold can sit
+between grid points. [`run_threshold_search_comparison.py`](src/models/run_threshold_search_comparison.py)
+checks: does a finer grid, or an exact search over every observed score (O(n log n) via sorted
+cumulative FN/FP counts, so it never misses the minimum), find something meaningfully better?
+
+| Strategy | Threshold (val) | Test cost reduction vs. default |
+|---|---|---|
+| 101-point grid (step 0.01) — used for every other number in this report | 0.0900 | +2.43% |
+| 1001-point grid (step 0.001) | 0.0190 | +4.56% |
+| Exact empirical search (every observed score) | 0.0197 | +5.17% |
+| Bayes-optimal (theoretical, `cost_fp/(cost_fn+cost_fp)`) | 0.0099 | −11.48% |
+
+Yes — noticeably. The exact search's validation-set cost is $315 lower than the 101-point grid's,
+and that gap is not just overfitting noise: it *also* more than doubles the test-set cost
+reduction, from 2.4% to 5.17%. **The 2.4% headline is a lower bound on what this method can
+achieve, not its ceiling** — it understates the benefit of cost-sensitive thresholding because of
+grid coarseness alone, on top of everything else this report already treats as a source of
+uncertainty (temporal instability, cost-ratio uncertainty, sampling noise).
+
+The theoretical Bayes-optimal threshold (0.0099, derived from `cost_fp/(cost_fn+cost_fp)` under
+the assumption of perfectly calibrated probabilities) is close in absolute terms to the empirical
+optimum (0.0197) but performs *worse* on test (−11.48%, i.e. worse than doing nothing) — a small
+absolute gap in a region where the cost curve is extremely steep translates into a large practical
+difference, and this specific divergence is itself evidence the raw XGBoost scores are not
+well-calibrated probabilities. That is investigated directly in the calibration comparison below.
+
+**Scope note:** this finer/exact search is not yet adopted as the standard in the rest of this
+report — the bootstrap CI, walk-forward evaluation, and cost-ratio sensitivity sweep below all
+still select thresholds from the 101-point grid, for consistency with each other and with the
+original leakage-fix analysis. Re-running that full suite with the exact search is listed under
+Future work; this section exists to make clear that doing so would very likely widen the reported
+benefit, not shrink it.
+
 ### 2. Is the result stable across time windows? (walk-forward evaluation)
 
 The full dataset (sorted by time) is cut into 5 equal blocks. Fold *k* trains on an expanding
@@ -301,3 +338,6 @@ intervention** — its benefit is real on average but small relative to the nois
 - Multi-day data to test genuine concept drift, not just intra-day window stability.
 - A theoretically motivated cost-sensitive objective (e.g., a custom asymmetric loss function
   rather than sample-weighting) as a fifth training-objective configuration.
+- Re-run the bootstrap, walk-forward, and cost-ratio sweep with the exact threshold search
+  (§1b) instead of the 101-point grid, to get a consistent, un-discretized basis for every
+  reported number rather than only the headline comparison.

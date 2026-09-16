@@ -128,6 +128,13 @@ relatively more expensive, recall climbing from 0.71 to 0.81 as precision falls 
 0.08. (Threshold 0.05 actually beats the val-selected 0.09 on test cost — the val→test
 generalization gap, made visible on purpose.)
 
+That 2.4% itself understates the method: it comes from a 101-point threshold grid. An exact
+search over every observed score ([`run_threshold_search_comparison.py`](src/models/run_threshold_search_comparison.py))
+finds a materially better threshold (0.02 vs. 0.09) and a **5.17%** test cost reduction — more
+than double. The grid was a discretization choice, not a limit of the method; see
+[`RESEARCH_REPORT.md §1b`](RESEARCH_REPORT.md#1b-is-the-grid-itself-limiting-the-result) for why
+the rest of this report still reports the grid-based 2.4% as its consistent baseline.
+
 ### Is any of this robust?
 
 ![Cost uncertainty threshold distribution](reports/figures/cost_uncertainty_threshold_distribution.png)
