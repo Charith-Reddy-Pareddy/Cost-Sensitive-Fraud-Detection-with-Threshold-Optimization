@@ -598,19 +598,27 @@ training needing enough data to actually learn the cost-shifted objective well.
 ## Statistical analysis
 
 Fraud is 0.17% of the primary test split (52 of 42,721 rows) — not much to draw firm conclusions
-from a single evaluation. Bootstrap resampling (1,000 resamples, 95% CI) on the corrected,
-val-selected threshold's test-set predictions:
+from a single evaluation. Bootstrap resampling (1,000 resamples, 95% CI) on the production
+model's val-selected threshold (0.0197, exact search as of the day-1 slice of the exact-search
+propagation described in Future work) applied to the test-set predictions:
 
 | Metric | Point estimate | 95% CI |
 |---|---|---|
 | PR-AUC | 0.758 | [0.630, 0.860] |
-| Precision @ 0.09 | 0.325 | [0.235, 0.407] |
-| Recall @ 0.09 | 0.769 | [0.640, 0.871] |
-| Expected cost @ 0.09 | $6,415 | [$3,390, $9,935] |
-| Cost reduction vs. default | 2.4% | [−9.3%, 18.7%] |
+| Precision @ 0.02 | 0.145 | [0.104, 0.187] |
+| Recall @ 0.02 | 0.808 | [0.690, 0.907] |
+| Expected cost @ 0.02 | $6,235 | [$3,607, $9,760] |
+| Cost reduction vs. default | 5.2% | [−24.6%, 29.1%] |
 
-The cost-reduction interval crosses zero. Combined with the walk-forward result (1 improved,
-1 tied, 2 worsened, of 4 folds) and the cost-uncertainty spread, the honest summary is: **on this dataset, cost-sensitive
+The cost-reduction interval crosses zero, and more dramatically than the earlier grid-based
+bootstrap did ([−9.3%, 18.7%] at threshold 0.09) — despite the better point estimate (5.2% vs.
+2.4%), exact search picked a more aggressive threshold that catches 2 more fraud cases at the
+cost of 164 more false alarms (§ production model), and that operating point sits in a steeper,
+noisier region of the cost curve, so bootstrap resampling swings the outcome more. A better point
+estimate and a wider confidence interval are not in tension — both are real properties of the
+same threshold. Combined with the walk-forward result (1 improved, 1 tied, 2 worsened, of 4
+folds — still grid-based, not yet re-run with exact search) and the cost-uncertainty spread, the
+honest summary is unchanged and if anything reinforced: **on this dataset, cost-sensitive
 threshold optimization has a positive expected effect but is not a reliably-winning
 intervention** — its benefit is real on average but small relative to the noise in a
 492-fraud-row dataset.
@@ -637,9 +645,13 @@ intervention** — its benefit is real on average but small relative to the nois
 - Multi-day data to test genuine concept drift, not just intra-day window stability.
 - A theoretically motivated cost-sensitive objective (e.g., a custom asymmetric loss function
   rather than sample-weighting) as a fifth training-objective configuration.
-- Re-run the bootstrap, walk-forward, and cost-ratio sweep with the exact threshold search
-  (§1b) instead of the 101-point grid, to get a consistent, un-discretized basis for every
-  reported number rather than only the headline comparison.
+- **In progress:** propagate exact threshold search (§1b) past the headline comparison to every
+  number that currently uses the 101-point grid, so the whole report shares one consistent,
+  un-discretized basis instead of a mix. Status: the production model and its bootstrap CI
+  (Statistical analysis, above) switched to exact search first, since every other consumer
+  (serving, the confusion matrix/ROC/PR figures) reads the threshold from that one trained
+  artifact. Walk-forward, the cost-ratio sensitivity sweep, calibration analysis, the ablation
+  study, and the training-objective comparison are still grid-based and queued next.
 - Diagnose the LightGBM anomaly from §7 (PR-AUC ≈0.02-0.05 on this dataset vs. 0.82 for
   XGBoost under identical no-weighting conditions, not reproduced on synthetic data at a
   matched imbalance ratio) rather than leaving it excluded.

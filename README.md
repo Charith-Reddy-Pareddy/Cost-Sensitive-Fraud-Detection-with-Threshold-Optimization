@@ -51,8 +51,8 @@ is the short version.
 | | |
 |---|---|
 | Best model | XGBoost (class-weighted) |
-| Cost-optimal threshold (val-selected, $500/$5 illustrative costs) | 0.09 |
-| Cost reduction vs. default (untouched test) | 2.4% (95% CI: −9.3% to 18.7%) |
+| Cost-optimal threshold (val-selected, exact search, $500/$5 illustrative costs) | 0.02 |
+| Cost reduction vs. default (untouched test) | 5.2% (95% CI: −24.6% to 29.1%) |
 | Walk-forward result (4 windows) | 1 improved, 1 tied, 2 worsened |
 | Replicates on a second dataset (Sparkov) | **No** |
 | Inference latency | 1.42ms p50 / 2.14ms p95 |
@@ -96,7 +96,7 @@ flowchart TD
     subgraph POLICY["Decision policy — turns a score into a block/allow call"]
         D --> E["Threshold optimization (val) + calibration (val)"]
     end
-    E --> F["Production pipeline: XGBoost @ 0.09"]
+    E --> F["Production pipeline: XGBoost @ 0.02"]
     E --> G["Walk-forward + cost-uncertainty checks"]
     F --> H["Sparkov external validation"]
     F -->|"POST /predict"| I["FastAPI service"]
@@ -137,7 +137,7 @@ both Brier score and cost; Platt scaling improves Brier but still costs more. Fu
 
 ### How the production model detects fraud
 
-The production pipeline (class-weighted XGBoost @ threshold 0.09) on the real, untouched test
+The production pipeline (class-weighted XGBoost @ threshold 0.02) on the real, untouched test
 set (42,721 rows, 52 fraud) — accuracy alone is meaningless at this imbalance (99.8% accuracy is
 achievable by predicting "not fraud" every time), so this is confusion matrix, ROC, and
 precision-recall, not a single accuracy number
@@ -147,8 +147,12 @@ precision-recall, not a single accuracy number
 <img src="reports/figures/roc_curve.png" width="420" alt="ROC curve">
 <img src="reports/figures/pr_curve.png" width="420" alt="Precision-recall curve">
 
-**40 of 52 fraud cases caught (recall 0.77), 83 false alarms out of 42,669 legitimate
-transactions (precision 0.33), ROC-AUC 0.983, PR-AUC 0.758.** The PR curve's chance line
+**42 of 52 fraud cases caught (recall 0.81), 247 false alarms out of 42,669 legitimate
+transactions (precision 0.15), ROC-AUC 0.983, PR-AUC 0.758.** The production threshold moved from
+0.09 to 0.02 when the model was retrained with exact threshold search instead of the 101-point
+grid (see [Cost-sensitive threshold optimization](#cost-sensitive-threshold-optimization) below)
+— 2 more fraud cases caught, 164 more false alarms, a real precision/recall tradeoff, not a free
+improvement. The PR curve's chance line
 (fraud rate 0.0012) is the point of showing it at all: ROC-AUC looks uniformly excellent even
 for a mediocre model here, because true negatives are so abundant they flood the false-positive
 rate axis — PR-AUC is far more sensitive to what actually happens at realistic operating
@@ -170,18 +174,30 @@ That 2.4% itself understates the method: it comes from a 101-point threshold gri
 search over every observed score ([`run_threshold_search_comparison.py`](src/models/run_threshold_search_comparison.py))
 finds a materially better threshold (0.02 vs. 0.09) and a **5.17%** test cost reduction — more
 than double. The grid was a discretization choice, not a limit of the method; see
-[`RESEARCH_REPORT.md §1b`](RESEARCH_REPORT.md#1b-is-the-grid-itself-limiting-the-result) for why
-the rest of this report still reports the grid-based 2.4% as its consistent baseline.
+[`RESEARCH_REPORT.md §1b`](RESEARCH_REPORT.md#1b-is-the-grid-itself-limiting-the-result) for the
+full comparison.
+
+**Migration in progress:** the production model and its bootstrap CI (below) now use exact
+threshold search as of the day-1 slice of an ongoing propagation; walk-forward and cost-ratio
+uncertainty below still select thresholds from the 101-point grid pending later days of that
+same migration, so the threshold values across these three checks aren't yet on a common basis
+— flagged here rather than left implicit. See [`RESEARCH_REPORT.md` Future work](RESEARCH_REPORT.md#future-work).
 
 ### Is any of this robust?
 
 ![Cost uncertainty threshold distribution](reports/figures/cost_uncertainty_threshold_distribution.png)
 
-- **Walk-forward (4 time windows):** optimized threshold improved cost in 1/4 folds, tied in
-  1/4, and made it worse in 2/4; the threshold itself swings from 0.04 to 0.62 across windows.
-- **Cost-ratio uncertainty (500 draws, cost_fn~U(100,1000), cost_fp~U(1,20)):** median threshold
-  0.09 matches the point estimate, but the range is [0.01, 0.75].
-- **Bootstrap (1,000 resamples):** cost reduction 2.4%, 95% CI **[−9.3%, 18.7%]** — crosses zero.
+- **Walk-forward (4 time windows, still grid-based):** optimized threshold improved cost in 1/4
+  folds, tied in 1/4, and made it worse in 2/4; the threshold itself swings from 0.04 to 0.62
+  across windows.
+- **Cost-ratio uncertainty (500 draws, still grid-based, cost_fn~U(100,1000), cost_fp~U(1,20)):**
+  median threshold 0.09 matches the grid point estimate, but the range is [0.01, 0.75].
+- **Bootstrap (1,000 resamples, now exact-search):** cost reduction 5.2%, 95% CI
+  **[−24.6%, 29.1%]** — crosses zero, and a wider interval than the old grid-based bootstrap
+  ([−9.3%, 18.7%]) despite the better point estimate: the exact-search threshold (0.02) is more
+  aggressive and sits in a steeper, noisier region of the cost curve, so the bootstrap is more
+  sensitive to which fraud rows land in each resample. A better point estimate and a wider CI
+  can both be true at once — reported as such, not smoothed into a single "better" verdict.
 
 Combined, the honest read: cost-sensitive threshold optimization has a positive expected effect
 here but isn't a reliable win on a 492-fraud-row dataset. Full numbers:
@@ -225,8 +241,8 @@ Same protocol and costs, applied to Sparkov
 |---|---|---|---|
 | Baseline PR-AUC | 0.757 | 0.909 | **0.969** |
 | Class weighting | helps marginally | **hurts** (0.909→0.882) | — |
-| Threshold optimization | +2.4% cost reduction | no effect (0%) | **−1.8%** (worse) |
-| Cost-reduction 95% CI | [−9.3%, 18.7%] | [0.0%, 0.0%] | [−9.1%, 1.5%] |
+| Threshold optimization | +5.2% cost reduction (exact search) | no effect (0%) | **−1.8%** (worse) |
+| Cost-reduction 95% CI | [−24.6%, 29.1%] | [0.0%, 0.0%] | [−9.1%, 1.5%] |
 | Walk-forward: improved / tied / worsened | 1 / 1 / 2 | 2 / 0 / 2 | **1 / 0 / 3** |
 | Cost-weighted training beats tuning | yes | — | **yes** |
 | Cost-ratio-uncertainty median threshold | 0.09 | — | 0.60 (anchored, not swinging) |
@@ -260,12 +276,13 @@ sparkov-api redis`), verified to score identically inside and outside Docker.
 
 ## Inference service
 
-`src/serving/app.py` serves the production pipeline at its cost-optimized threshold (0.09).
+`src/serving/app.py` serves the production pipeline at its cost-optimized threshold (0.02,
+exact search).
 
 ```bash
 uvicorn src.serving.app:app --reload   # then see http://localhost:8000/docs
 curl -X POST localhost:8000/predict -H "Content-Type: application/json" -d '{"Time": 120000, "V1": -2.31, ...}'
-# -> {"fraud_probability": 0.913, "is_fraud": true, "threshold": 0.09, "latency_ms": 1.6}
+# -> {"fraud_probability": 0.913, "is_fraud": true, "threshold": 0.02, "latency_ms": 1.6}
 ```
 
 | Endpoint | |
