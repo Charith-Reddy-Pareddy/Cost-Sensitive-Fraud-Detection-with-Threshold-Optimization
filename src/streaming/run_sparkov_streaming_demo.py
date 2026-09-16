@@ -9,8 +9,6 @@ then replays the most recent `N_REPLAY_ROWS` transactions in time order against 
 """
 
 import pandas as pd
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler
 from xgboost import XGBClassifier
 
 from src.data.ingest_sparkov import (
@@ -25,11 +23,11 @@ from src.streaming.redis_features_sparkov import card_velocity_features, get_red
 N_REPLAY_ROWS = 5000
 
 
-def _build_pipeline(scale_pos_weight: float) -> Pipeline:
+def _build_pipeline(scale_pos_weight: float) -> XGBClassifier:
     classifier = XGBClassifier(
         n_estimators=200, max_depth=4, learning_rate=0.1, eval_metric="aucpr", n_jobs=-1, scale_pos_weight=scale_pos_weight
     )
-    return Pipeline(steps=[("scale", StandardScaler()), ("classifier", classifier)])
+    return classifier
 
 
 def main() -> None:

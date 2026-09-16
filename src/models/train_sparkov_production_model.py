@@ -8,8 +8,6 @@ from pathlib import Path
 
 import joblib
 import pandas as pd
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler
 from xgboost import XGBClassifier
 
 from src.data.ingest_sparkov import FEATURE_COLUMNS, TARGET_COLUMN
@@ -24,11 +22,11 @@ def _load_split(name: str) -> tuple[pd.DataFrame, pd.Series]:
     return df[FEATURE_COLUMNS], df[TARGET_COLUMN]
 
 
-def _build_pipeline(scale_pos_weight: float) -> Pipeline:
+def _build_pipeline(scale_pos_weight: float) -> XGBClassifier:
     classifier = XGBClassifier(
         n_estimators=200, max_depth=4, learning_rate=0.1, eval_metric="aucpr", n_jobs=-1, scale_pos_weight=scale_pos_weight
     )
-    return Pipeline(steps=[("scale", StandardScaler()), ("classifier", classifier)])
+    return classifier
 
 
 def main() -> None:
