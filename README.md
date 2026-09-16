@@ -242,6 +242,13 @@ configuration tested, including the cost-weighted model tuned against its own sc
 on test than cost-weighted training's untouched default decision. Threshold tuning on top
 appears to double-count the cost asymmetry rather than add to it. Full mechanism study:
 [`RESEARCH_REPORT.md §4b`](RESEARCH_REPORT.md#4b-why-does-combining-them-hurt-a-calibration-explanation).
+A 108-run synthetic factorial study (varying imbalance, signal strength, cost ratio, and sample
+size independently) confirms this isn't specific to the primary dataset: **imbalance severity is
+the dominant driver** — at severe imbalance, cost-weighted training alone wins most often and
+combining with tuning helps only 38.9% of the time; at mild imbalance that flips to 63.9%. The
+§4b calibration explanation itself doesn't clearly replicate in direction, though, and that's
+reported as an open question rather than smoothed over:
+[`RESEARCH_REPORT.md §8`](RESEARCH_REPORT.md#8-when-does-training-time-cost-sensitivity-substitute-for-rather-than-complement-decision-time-thresholding-a-synthetic-factorial-study).
 Likely reason: Sparkov's engineered features already separate classes almost perfectly, leaving
 little room for cost-sensitive machinery to help. Every Sparkov robustness check agrees in
 direction with itself even as it disagrees with the primary dataset. Full breakdown of all 4

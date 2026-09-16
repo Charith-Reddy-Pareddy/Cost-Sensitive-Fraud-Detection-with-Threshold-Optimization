@@ -520,6 +520,81 @@ resolved within the scope of this report. Reporting a broken number to hit a rou
 would be worse than documenting the gap honestly; this is flagged here, and in Future work, as
 unresolved rather than fixed.
 
+### 8. When does training-time cost-sensitivity substitute for, rather than complement,
+decision-time thresholding? A synthetic factorial study
+
+Every experiment so far answers this at one or two points in imbalance/signal/cost-ratio/
+sample-size space — the real datasets available. That can't distinguish "this is how
+cost-sensitivity works, generally" from "this is what happened to work on these two specific
+datasets." [`run_synthetic_cost_sensitivity_study.py`](src/models/run_synthetic_cost_sensitivity_study.py)
+runs a controlled factorial study on synthetic data (`sklearn.datasets.make_classification`),
+independently varying four factors — class imbalance (0.5%/2%/8% fraud), signal strength
+(`class_sep` 0.5/1.5/3.0), cost ratio (cost_fn/cost_fp 10/100), and sample size (5,000/50,000) —
+3×3×2×2 = 36 cells × 3 seeds = 108 runs, repeating Experiment 4's A/B/C/D comparison
+(standard @ 0.5, standard + tuned threshold, cost-weighted @ 0.5, cost-weighted + tuned threshold)
+in each cell. Full results: [`results/synthetic_cost_sensitivity_study.csv`](results/synthetic_cost_sensitivity_study.csv).
+
+**Scope, stated upfront (2 of the 6 originally-suggested factors are out of scope here):**
+calibration error is measured as an *outcome* (each model's Brier score) rather than
+independently injected, since doing that without also changing discrimination is its own
+sub-project; temporal shift needs a synthetic generator with a drifting decision boundary, which
+this script doesn't build. Both are listed under Future work rather than approximated.
+
+**Overall, across all 108 runs:** threshold tuning beats the standard-model default 64.8% of the
+time; cost-weighted training beats it 63.0% of the time; and — the specific question Experiment 4
+raised on real data — combining cost-weighted training with threshold tuning beats cost-weighted
+training alone only **50.9%** of the time, essentially a coin flip. The clearest signal is in
+*when* that coin flip tips which way:
+
+| Factor | Level | Cost-weighting helps (C beats A) | Combining helps further (D beats C) |
+|---|---|---|---|
+| Imbalance | 0.5% (severe) | 72.2% | **38.9%** |
+| Imbalance | 2% | 61.1% | 50.0% |
+| Imbalance | 8% (mild) | 55.6% | **63.9%** |
+| Cost ratio | 10 | 66.7% | 37.0% |
+| Cost ratio | 100 | 59.3% | 64.8% |
+| Signal strength | weak (0.5) | 75.0% | 50.0% |
+| Signal strength | strong (3.0) | 52.8% | 44.4% |
+| Sample size | 5,000 | 55.6% | 50.0% |
+| Sample size | 50,000 | 70.4% | 51.9% |
+
+**Imbalance severity replicates the primary-dataset finding cleanly.** At the most severe
+synthetic imbalance (0.5% fraud — close to the primary dataset's real 0.17%), cost-weighted
+training alone is most likely to beat the default (72.2%) *and* adding threshold tuning on top is
+least likely to help further (38.9% — i.e. more often than not, combining actively hurts). At
+mild imbalance (8%), that flips: cost-weighting helps less often on its own (55.6%), but combining
+helps more often (63.9%). This is exactly the shape of the primary-dataset result (severe
+imbalance, cost-weighted training alone wins, tuning on top makes it worse) and it's not a
+one-off — it's the dominant pattern across the grid, not just this project's specific dataset.
+
+**Cost ratio does not point the same direction, and that's reported honestly rather than
+smoothed over.** The primary dataset combines severe imbalance *and* a severe cost ratio
+(100:1), and both "explanations" were plausible going in. This study can now separate them: at
+the higher cost ratio (100), combining tuning with cost-weighted training helps *more* often
+(64.8%), not less — the opposite of the imbalance-driven pattern. Taken together, this suggests
+imbalance severity, not cost-ratio severity, is the more likely driver of the specific "D beats C"
+failure seen on the primary dataset — but the two factors weren't cleanly separable in that single
+real dataset, and this synthetic result is what makes that distinction visible at all.
+
+**The §4b calibration mechanism does not clearly replicate here.** Experiment 4b's proposed
+mechanism was that cost-weighted training measurably degrades calibration (worse Brier score),
+which is why decision-time tuning on top double-counts the cost asymmetry. In this synthetic
+sweep, that direction only holds at *mild* imbalance (mean Brier gap +0.054, cost-weighted
+worse) — at *severe* imbalance, where the primary dataset actually sits and where §4b's finding
+was made, cost-weighted training's Brier score is on average *better*, not worse (gap −0.025).
+This is a genuine non-replication, not a footnote: it means §4b's specific calibration-based
+explanation may be correct on the primary dataset without being the general mechanism — imbalance
+severity's effect on the D-vs-C outcome (confirmed above) might run through a different or
+additional pathway that this study wasn't designed to isolate. Reported as an open question, not
+resolved here.
+
+**Signal strength and sample size are secondary but consistent with intuition.** Weaker signal
+(harder-to-separate classes) makes cost-weighted training more likely to help (75.0% vs. 52.8% at
+strong signal) — a weak model has more room for any cost-sensitivity mechanism to move the needle.
+Larger samples make cost-weighted training more reliably beneficial (70.4% vs. 55.6% at 5,000
+rows) without much effect on whether combining helps further, consistent with cost-weighted
+training needing enough data to actually learn the cost-shifted objective well.
+
 ## Statistical analysis
 
 Fraud is 0.17% of the primary test split (52 of 42,721 rows) — not much to draw firm conclusions
@@ -568,3 +643,10 @@ intervention** — its benefit is real on average but small relative to the nois
 - Diagnose the LightGBM anomaly from §7 (PR-AUC ≈0.02-0.05 on this dataset vs. 0.82 for
   XGBoost under identical no-weighting conditions, not reproduced on synthetic data at a
   matched imbalance ratio) rather than leaving it excluded.
+- Extend §8's synthetic factorial study to the 2 factors it left out: calibration error
+  injected independently of discrimination (not just measured as an outcome), and temporal
+  shift via a synthetic generator with a drifting decision boundary.
+- Resolve §8's open question directly: why does the §4b calibration-degradation mechanism not
+  replicate in direction at severe synthetic imbalance, when the imbalance-driven D-vs-C
+  pattern itself does replicate cleanly? A likely next step is measuring calibration slope/
+  intercept (not just Brier, which conflates calibration and discrimination) across the grid.
