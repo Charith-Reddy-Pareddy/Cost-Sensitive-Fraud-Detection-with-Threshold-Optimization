@@ -1,0 +1,18 @@
+# Sparkov dataset (external validation), same knobs as primary.yaml with dataset switched.
+dataset: sparkov
+mode: cost_analysis
+
+model:
+  n_estimators: 200
+  max_depth: 4
+  learning_rate: 0.1
+
+cost:
+  fn: 500.0
+  fp: 5.0
+
+threshold_search: exact
+
+cost_ratios: [5, 10, 25, 50, 75, 100, 150, 200, 300, 500]
+
+n_blocks: 5

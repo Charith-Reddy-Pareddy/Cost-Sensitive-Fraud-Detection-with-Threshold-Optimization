@@ -336,6 +336,11 @@ run those with `python -m src.models.<name>`). `make manifest` regenerates
 artifacts, processed split sizes, package versions, fixed seeds, and the git commit — so any
 reported number can be traced back to exactly what produced it, not just trusted on faith.
 
+For re-running the cost-optimal threshold, cost-ratio sweep, or walk-forward experiments under
+different costs, hyperparameters, or datasets without editing code, there's a Hydra-configured
+entry point: `python -m experiments.run` (see [`configs/`](configs/) — `primary`, `sparkov`,
+`cost_sweep`, `temporal`), e.g. `python -m experiments.run --config-name=sparkov cost.fn=1000`.
+
 **Environment note:** XGBoost and PyTorch each bundle their own OpenMP runtime — set
 `OMP_NUM_THREADS=1` if running both in one process on macOS (already handled in
 [`src/__init__.py`](src/__init__.py)). `xgboost` is pinned below 3.0 for SHAP compatibility.

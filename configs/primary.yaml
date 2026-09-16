@@ -1,0 +1,18 @@
+# Primary dataset (Kaggle credit-card fraud), the default config for `python -m experiments.run`.
+dataset: primary
+mode: cost_analysis  # cost_analysis | cost_sweep | temporal
+
+model:
+  n_estimators: 200
+  max_depth: 4
+  learning_rate: 0.1
+
+cost:
+  fn: 500.0  # illustrative missed-fraud cost, not sourced
+  fp: 5.0    # illustrative blocked-legitimate-transaction cost, not sourced
+
+threshold_search: exact  # exact | grid
+
+cost_ratios: [5, 10, 25, 50, 75, 100, 150, 200, 300, 500]  # used by mode: cost_sweep
+
+n_blocks: 5  # used by mode: temporal

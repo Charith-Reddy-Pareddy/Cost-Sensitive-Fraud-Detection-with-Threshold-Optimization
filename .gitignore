@@ -20,3 +20,5 @@ models/artifacts/
 
 .env
 .DS_Store
+
+outputs/

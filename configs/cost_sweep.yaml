@@ -1,0 +1,6 @@
+# Cost-ratio sensitivity sweep on the primary dataset: `python -m experiments.run --config-name=cost_sweep`
+defaults:
+  - primary
+  - _self_
+
+mode: cost_sweep
