@@ -11,7 +11,7 @@ import pandas as pd
 from xgboost import XGBClassifier
 
 from src.data.ingest_sparkov import FEATURE_COLUMNS, TARGET_COLUMN
-from src.models.cost_engine import DEFAULT_COST_FALSE_NEGATIVE, DEFAULT_COST_FALSE_POSITIVE, optimize_threshold
+from src.models.cost_engine import DEFAULT_COST_FALSE_NEGATIVE, DEFAULT_COST_FALSE_POSITIVE, exact_optimal_threshold
 from src.models.run_sparkov_bootstrap_analysis import PROCESSED_DIR
 
 ARTIFACTS_DIR = Path(__file__).resolve().parents[2] / "models" / "artifacts"
@@ -38,8 +38,8 @@ def main() -> None:
     pipeline.fit(X_train, y_train)
 
     val_proba = pipeline.predict_proba(X_val)[:, 1]
-    sweep = optimize_threshold(
-        y_val.to_numpy(), val_proba, cost_fn=DEFAULT_COST_FALSE_NEGATIVE, cost_fp=DEFAULT_COST_FALSE_POSITIVE
+    sweep = exact_optimal_threshold(
+        y_val.to_numpy(), val_proba, DEFAULT_COST_FALSE_NEGATIVE, DEFAULT_COST_FALSE_POSITIVE
     )
 
     ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -53,7 +53,7 @@ def main() -> None:
     }
     (ARTIFACTS_DIR / "sparkov_production_metadata.json").write_text(json.dumps(metadata, indent=2))
 
-    print(f"saved sparkov production pipeline, threshold={sweep.optimal_threshold:.2f}")
+    print(f"saved sparkov production pipeline, threshold={sweep.optimal_threshold:.4f}")
 
 
 if __name__ == "__main__":
