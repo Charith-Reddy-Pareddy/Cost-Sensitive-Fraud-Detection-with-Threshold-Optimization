@@ -327,7 +327,14 @@ pytest tests/ -q
 ```
 
 Every individual experiment's script is linked inline where it's discussed in
-[`RESEARCH_REPORT.md`](RESEARCH_REPORT.md) — this is just the core reproducible flow.
+[`RESEARCH_REPORT.md`](RESEARCH_REPORT.md) — this is just the core reproducible flow. The same
+flow is also a one-line command, `make reproduce` (`make reproduce-primary` /
+`make reproduce-sparkov` individually) — see [`Makefile`](Makefile) for exactly what it runs and,
+just as important, what it deliberately doesn't (every ablation/robustness script separately;
+run those with `python -m src.models.<name>`). `make manifest` regenerates
+[`results/manifest.json`](results/manifest.json): a checksum of the raw data and trained model
+artifacts, processed split sizes, package versions, fixed seeds, and the git commit — so any
+reported number can be traced back to exactly what produced it, not just trusted on faith.
 
 **Environment note:** XGBoost and PyTorch each bundle their own OpenMP runtime — set
 `OMP_NUM_THREADS=1` if running both in one process on macOS (already handled in
