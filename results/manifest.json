@@ -1,0 +1,73 @@
+{
+  "generated_at_commit": "9ec53411ea1fcf700591f5bcca027303c1ea3969",
+  "working_tree_dirty_when_generated": true,
+  "python_version": "3.12.8",
+  "package_versions": {
+    "pandas": "2.3.3",
+    "numpy": "2.2.6",
+    "scikit-learn": "1.7.2",
+    "xgboost": "2.1.4",
+    "imbalanced-learn": "0.14.2",
+    "torch": "2.13.0",
+    "shap": "0.49.1",
+    "mlflow": "3.15.1",
+    "fastapi": "0.141.1"
+  },
+  "seeds": {
+    "note": "This project does not use one global seed; every place randomness matters pins its own.",
+    "bootstrap_ci_default_seed": 0,
+    "sklearn_random_state (SMOTE, BalancedRandomForest)": 0,
+    "numpy_default_rng_seed (synthetic sweeps, cluster-effect tests)": 0
+  },
+  "raw_data": {
+    "primary": {
+      "path": "data/raw/creditcard.csv",
+      "sha256": "76274b691b16a6c49d3f159c883398e03ccd6d1ee12d9d8ee38f4b4b98551a89",
+      "bytes": 150828752
+    },
+    "sparkov_train": {
+      "path": "data/raw/sparkov/fraudTrain.csv",
+      "sha256": "fd7139200dbfcbed0b6742bbe05a4f1abce532c4fef20918228a651647a3e75d",
+      "bytes": 351238196
+    },
+    "sparkov_test": {
+      "path": "data/raw/sparkov/fraudTest.csv",
+      "sha256": "12d553ab19440c752d2531ee1af44bb64f12cc3d3839f1649f19e81c230545f0",
+      "bytes": 150354339
+    }
+  },
+  "processed_splits": {
+    "primary": {
+      "train": 193669,
+      "val": 48417,
+      "test": 42721
+    },
+    "sparkov": {
+      "train": 881739,
+      "val": 220435,
+      "test": 194501
+    }
+  },
+  "model_artifacts": {
+    "xgboost": {
+      "path": "models/artifacts/xgboost.joblib",
+      "sha256": "3b3b35b4dd91ce364171d1404a1f5a1d79c1598b2fa4a6683af989814c5b832f",
+      "bytes": 296441
+    },
+    "logistic_regression": {
+      "path": "models/artifacts/logistic_regression.joblib",
+      "sha256": "2de54d26906a8dcf34f8341426e9bf6562570974f2dbcc221efffed75f3bc35a",
+      "bytes": 3601
+    },
+    "production_pipeline": {
+      "path": "models/artifacts/production_pipeline.joblib",
+      "sha256": "551cb8ad7dd7368cffce1454db3ccba6641094985fb0c06582a361973268740e",
+      "bytes": 307668
+    },
+    "sparkov_production_pipeline": {
+      "path": "models/artifacts/sparkov_production_pipeline.joblib",
+      "sha256": "bc7096181742bd542867ff64483678c19a742c71baeda7aae29bb6c0c12b6cf2",
+      "bytes": 337136
+    }
+  }
+}
