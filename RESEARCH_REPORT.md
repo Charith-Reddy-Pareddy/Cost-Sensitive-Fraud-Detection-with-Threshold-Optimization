@@ -36,6 +36,18 @@ All splits are chronological (sorted by transaction time, not shuffled), for the
 stated throughout this project: a random split lets the model see transactions that happen after
 the ones it's evaluated on.
 
+**Hyperparameter selection protocol.** Every XGBoost model in this project — primary and
+Sparkov, every experiment — uses the same fixed hyperparameters: `n_estimators=200, max_depth=4,
+learning_rate=0.1`. These were **not tuned**: no grid search, random search, or Bayesian
+optimization was run over them, and no value was ever chosen by looking at validation or test
+performance. They are reasonable defaults for a dataset of this size and were fixed once at the
+start of the project, before any evaluation numbers existed to influence the choice. This rules
+out one specific failure mode — outcome-influenced hyperparameter selection quietly inflating the
+reported results — but it does not mean these are good hyperparameters. A hyperparameter sweep
+(inner train→val tuning, never touching test) is listed as future work; the honest reading of
+every result in this report is "with untuned, fixed XGBoost hyperparameters," not "with the best
+model this method could produce."
+
 ## Experiments
 
 ### 1. Does the corrected protocol change the headline result?
