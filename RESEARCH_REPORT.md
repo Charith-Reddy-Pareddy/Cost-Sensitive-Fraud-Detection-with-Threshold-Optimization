@@ -404,6 +404,69 @@ outcome, regardless of sharing a card ID. Cluster bootstrapping is still the met
 correct default whenever a natural grouping exists — it can only reveal understated uncertainty,
 never hide overstated uncertainty — it simply turned out not to change the conclusion here.
 
+### 6. What changes under amount-proportional costs and a fixed review capacity?
+
+Every experiment so far uses one flat cost per class: $500 for any missed fraud, $5 for any
+blocked legitimate transaction, regardless of the transaction's actual dollar amount. That's a
+simplification worth stress-testing directly.
+[`run_decision_policy_analysis.py`](src/models/run_decision_policy_analysis.py) switches to
+`amount_proportional_fn_cost` — the false-negative cost of a missed fraud becomes its own
+transaction amount (floored at $5, no recovery/chargeback modeling) — and asks three questions
+against that more realistic cost model, on the primary dataset's val/test split.
+
+**6a. Does the optimal threshold change?** Substantially. Under flat costs the val-selected
+threshold is 0.0197 (Experiment 1b's exact search); under amount-proportional costs it jumps to
+**0.8758** — a completely different operating point. The reason follows directly from the cost
+ratio: the flat model assumes every fraud costs $500 against a $5 false-positive cost (ratio
+100:1), which justifies flagging almost anything with any real fraud signal. The actual test-set
+fraud amounts average far below $500 (total fraud-dollar exposure in the test split is only
+$6,260.74 across 52 fraud rows, i.e. ~$120/fraud on average), so the *effective* cost ratio for a
+typical fraud in this data is much closer to 1:1 — which justifies a far more conservative
+threshold. Evaluated on test, the amount-proportional threshold costs $2,678.65 versus $2,967.12
+if the flat-selected threshold (0.0197) were used instead on the same amount-weighted cost
+function — a real, non-trivial difference driven entirely by which cost model is assumed.
+
+**6b. The decision curve.** Sweeping the threshold and tracking (legitimate transactions blocked,
+fraud dollars caught) traces the Pareto frontier a fraud-ops team actually faces — you cannot buy
+more fraud dollars caught without also buying more blocked legitimate transactions:
+
+![Decision curve](reports/figures/decision_curve.png)
+
+At 10 legitimate transactions blocked, $3,796 in fraud is already caught; the curve is flat from
+10 to 50 blocked (no additional fraud in that stretch of the ranking), then rises again to $4,430
+by 100 blocked and $4,450 by 300 — steeply diminishing returns past the first ~100 blocked
+transactions.
+
+**6c. Capacity-constrained review (K=100, illustrative).** If a review team can only act on a
+fixed number of transactions rather than "however many clear the threshold," four policies
+diverge in an important way that the flat-cost model *cannot* reveal — under flat per-class costs,
+ranking by raw score, by expected dollar loss (`proba × amount`), and by calibrated expected loss
+all preserve the *same* rank order (every fraud is worth the same $500, so higher probability
+always means higher expected value). Amount-proportional costs break that: probability and dollar
+value can now trade off against each other, which is exactly what makes "cost-sensitive ranking"
+a genuinely different policy from "top-K by score" — not just a special case of it.
+
+| Policy | # flagged | Fraud caught (events) | Recall | Fraud $ caught | $ recall | Legit blocked |
+|---|---|---|---|---|---|---|
+| Static threshold (0.0197, uncapped) | 289 | 42/52 | 0.808 | $4,450.15 | 0.721 | 247 |
+| Top-K by raw score (K=100) | 100 | 39/52 | 0.750 | $3,796.48 | 0.615 | 61 |
+| Top-K cost-sensitive: `proba × amount` (K=100) | 100 | 17/52 | 0.327 | $4,392.51 | 0.712 | 83 |
+| Top-K calibrated: `calibrated_proba × amount` (K=100) | 100 | 21/52 | 0.404 | $4,413.81 | 0.715 | 79 |
+
+Only 46 of the 100 top-K-by-score and top-K-cost-sensitive selections overlap — these are
+genuinely different sets of transactions, not a reordering of the same ones. The static,
+uncapped threshold catches the most fraud on both axes, but at the cost of flagging 289
+transactions (2.9× the review capacity) — not a policy a capacity-constrained team could actually
+run. Among the capacity-constrained options, **top-K by raw score catches more individual fraud
+cases (39 vs. 17-21) while cost-sensitive ranking catches more fraud dollars with far fewer
+cases caught (17 events for $4,393 vs. 39 events for $3,796)** — cost-sensitive ranking
+concentrates the fixed review budget on a small number of large-dollar frauds and gives up on
+many small-dollar ones entirely, since each one contributes little to the total-dollar objective
+it's actually optimizing. Which policy is "better" is a genuine business-values question this
+report cannot answer for the reader: minimizing total dollar loss and minimizing the number of
+customers who experience fraud are different objectives, and this table is the first place in the
+project where that distinction has real, measurable teeth.
+
 ## Statistical analysis
 
 Fraud is 0.17% of the primary test split (52 of 42,721 rows) — not much to draw firm conclusions

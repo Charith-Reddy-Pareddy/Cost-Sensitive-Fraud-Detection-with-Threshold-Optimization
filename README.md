@@ -149,6 +149,17 @@ Combined, the honest read: cost-sensitive threshold optimization has a positive 
 here but isn't a reliable win on a 492-fraud-row dataset. Full numbers:
 [`RESEARCH_REPORT.md`](RESEARCH_REPORT.md#statistical-analysis).
 
+### Amount-proportional costs and capacity-constrained review
+
+Every number above assumes a flat $500 cost per missed fraud, regardless of the transaction's
+actual size. Switching to a cost proportional to the transaction amount moves the optimal
+threshold from 0.02 to **0.88** — a completely different operating point — and, under a fixed
+review capacity (a team that can only act on K transactions, not "however many clear a
+threshold"), ranking by raw fraud probability and ranking by expected dollar loss
+(`probability × amount`) select mostly *different* transactions (46/100 overlap): one catches
+more individual fraud cases, the other catches more fraud dollars with far fewer cases. Full
+breakdown: [`RESEARCH_REPORT.md §6`](RESEARCH_REPORT.md#6-what-changes-under-amount-proportional-costs-and-a-fixed-review-capacity).
+
 ### Interpretability
 
 ![Top 10 SHAP features](reports/figures/shap_summary.png)
