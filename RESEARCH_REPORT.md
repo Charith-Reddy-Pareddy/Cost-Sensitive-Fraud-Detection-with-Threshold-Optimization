@@ -217,6 +217,33 @@ tuning aggressively toward the sharp minimum near 0.01. That leaves cost-weighte
 split noise — real room to overfit that noise instead of capturing signal, exactly what the D < C
 result shows.
 
+#### 4c. Is "C beats D" real, or noise from one 57,000-row split?
+
+C and D use the exact same cost-weighted model and the exact same test rows — they differ only in
+which threshold gets applied (0.5 vs. the val-selected 0.02) — which makes this a genuinely
+*paired* comparison, not two independent ones. `paired_bootstrap_comparison`
+([`src/models/bootstrap_evaluation.py`](src/models/bootstrap_evaluation.py)) resamples both
+configurations on the same bootstrap draw each time, isolating the difference between them from
+the sampling noise they'd otherwise both be equally subject to
+([`run_paired_bootstrap_comparison.py`](src/models/run_paired_bootstrap_comparison.py), 1,000
+resamples):
+
+| | Value |
+|---|---|
+| Observed cost, C (threshold 0.5) | $6,530 |
+| Observed cost, D (threshold 0.02) | $7,070 |
+| Observed diff (C − D) | **−$540** |
+| Paired bootstrap mean diff | −$541 |
+| Paired bootstrap 95% CI | **[−$645, −$445]** |
+| P(C beats D) | **1.000** |
+
+The 95% CI excludes zero entirely, and C won in all 1,000 resamples. **This is not noise** — C
+reliably beating D is a stable property of this model and this cost function on this dataset, not
+an artifact of which 57,000 rows happened to land in the test split. That strengthens Experiment
+4's conclusion considerably: the earlier framing ("D is worse than C") was a single-split point
+estimate; this shows it holds up under resampling with about as much statistical confidence as a
+1,000-sample bootstrap can offer.
+
 ### 5. Does any of this generalize to a structurally different dataset?
 
 The primary dataset is anonymized PCA components with 492 fraud rows total — useful for method
@@ -344,6 +371,38 @@ across nearly every draw — consistent with Experiments 5a–5c: a near-perfect
 0.969) has much less to gain from moving the threshold around, regardless of the assumed cost
 ratio. All five Sparkov robustness checks now point the same direction: the stronger the raw
 signal, the less any of this cost-sensitive machinery has left to contribute.
+
+#### 5e. Row-level vs. card-level bootstrap: does clustering change the Sparkov intervals?
+
+Every bootstrap CI in this report, including 5a–5d above, resamples individual rows (`bootstrap_ci`
+in `src/models/bootstrap_evaluation.py`), which implicitly treats each row as independent
+evidence. That's questionable on Sparkov specifically: `cc_num` means the same card generates many
+transactions, and those transactions could plausibly be correlated (the same spending pattern, the
+same compromise event). The primary dataset has no entity identifier, so this check is only
+possible on Sparkov. [`run_sparkov_cluster_bootstrap_analysis.py`](src/models/run_sparkov_cluster_bootstrap_analysis.py)
+resamples whole cards instead of rows (`cluster_bootstrap_ci`) and compares interval widths
+directly against the row-level bootstrap, on the same test predictions (194,501 rows, 947 unique
+cards):
+
+| Metric | IID (row-level) 95% CI | Cluster (card-level) 95% CI | Width ratio (cluster / IID) |
+|---|---|---|---|
+| PR-AUC | [0.9577, 0.9737] | [0.9593, 0.9734] | 0.88 |
+| Precision @ 0.51 | [0.4340, 0.4728] | [0.4320, 0.4720] | 1.03 |
+| Recall @ 0.51 | [0.9731, 0.9889] | [0.9737, 0.9885] | 0.94 |
+| Expected cost @ 0.51 | [$12,944, $21,956] | [$13,089, $21,903] | 0.98 |
+
+**This is a genuine negative result, reported as one rather than reframed.** The methodological
+concern behind clustering is real — row-level resampling *can* understate uncertainty when rows
+within a cluster are correlated — but on this specific test set it doesn't materially matter: the
+cluster and row-level intervals are close to the same width (ratios 0.88–1.03), not the
+substantially wider cluster interval the concern would predict if within-card correlation were
+strong. The likely reason is structural, not a flaw in the method: this Sparkov split's 194,501
+test rows sit on 947 cards (~205 transactions per card on average), and if fraud events are spread
+fairly evenly across many different cards rather than concentrated in a small number of
+compromised ones, then each row genuinely does carry close to independent information about the
+outcome, regardless of sharing a card ID. Cluster bootstrapping is still the methodologically
+correct default whenever a natural grouping exists — it can only reveal understated uncertainty,
+never hide overstated uncertainty — it simply turned out not to change the conclusion here.
 
 ## Statistical analysis
 
