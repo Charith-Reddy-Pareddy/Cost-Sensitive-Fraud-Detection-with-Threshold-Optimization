@@ -12,6 +12,15 @@ below). This project's original framing was: pick the best model, then optimize 
 threshold against an explicit cost function. That framing turned out to have a real
 methodological gap, described next.
 
+Throughout this report, "**predictive model**" means the classifier that ranks transactions by
+fraud likelihood (evaluated by PR-AUC, Brier score, calibration), and "**decision policy**" means
+whatever turns that ranking into a block/allow call (a threshold, a top-K cutoff, a calibrated
+expected-loss ranking — see Experiment 6). Cost-sensitivity can be built into either layer
+independently, or both — that's the substance of Experiments 4, 4b, and 4c, and the sharper
+version of this report's research question: not just "does cost-sensitive thresholding help,"
+but **when should cost asymmetry be incorporated during training versus at decision time, and
+what happens when it's applied to both?**
+
 ## Hypothesis
 
 Cost-sensitive threshold optimization reduces expected financial loss relative to a default 0.5

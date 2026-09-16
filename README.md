@@ -6,11 +6,38 @@
 **[Live dashboard →](https://charith-reddy-pareddy.github.io/Cost-Sensitive-Fraud-Detection-with-Threshold-Optimization/)**
 — headline metrics, confusion matrix, ROC/PR curves, and every robustness finding in one page.
 
-Fraud detection isn't an accuracy-maximization problem — missing a fraudulent transaction and
-blocking a legitimate customer cost different amounts. This project optimizes the decision
-threshold against a cost function instead of 0.5, then asks the harder question: **how robust is
-that improvement**, once checked against a held-out validation split, across time windows, under
-cost-ratio uncertainty, and on a second, structurally different dataset?
+**The problem.** Fraud detection is usually framed as an accuracy-maximization problem, but the
+decision it actually feeds isn't: missing a fraudulent transaction and blocking a legitimate
+customer cost different amounts, and a model can rank fraud excellently (high PR-AUC) while still
+making bad decisions at whatever threshold it's deployed at. This project separates fraud
+detection into two layers on purpose — a **predictive model** that ranks transactions by fraud
+likelihood, and a **decision policy** on top of it that turns that ranking into a block/allow call
+under an explicit cost function — and treats *when cost-sensitivity belongs in the training
+objective versus the decision policy* as the central question, not an afterthought.
+
+**The system.** Class-weighted XGBoost (plus an autoencoder and imbalance-handling comparison)
+against $500/$5 illustrative costs, with exact and Bayes-optimal threshold search, probability
+calibration, cost-weighted training as an alternative to threshold tuning, bootstrap/walk-forward/
+cost-ratio robustness checks, amount-proportional costs and capacity-constrained review, SHAP
+interpretability, external validation on a structurally different second dataset (Sparkov), a
+FastAPI serving layer, a Redis/Kafka streaming prototype, and a live dashboard.
+
+**Strongest result.** Cost-weighted training alone beats every threshold-tuned configuration
+tested, including itself tuned further — and *why* is now a resolved, evidence-backed question,
+not a guess: its raw Brier score is measurably worse than standard training's (0.00045 vs.
+0.00040), and combining it with decision-time threshold tuning reliably makes things worse across
+1,000 paired bootstrap resamples (P(worse) = 1.000). Cost asymmetry baked into training and
+cost asymmetry applied at decision time aren't complementary here — they substitute for, and can
+actively undermine, each other.
+
+**Honest limitation.** The headline "does threshold optimization help" result doesn't reliably
+replicate: it's a coin flip across time windows on the primary dataset (1 improved, 1 tied, 2
+worsened of 4 walk-forward folds), its 95% bootstrap CI crosses zero, and it doesn't replicate at
+all on a second, structurally different dataset. This project reports that plainly rather than
+picking the split that looks best.
+
+**Technologies:** Python, XGBoost, scikit-learn, imbalanced-learn, PyTorch, SHAP, MLflow, FastAPI,
+Redis, Kafka (Redpanda), Docker/docker-compose, GitHub Actions, GitHub Pages.
 
 **Core research question:** which modeling approach performs best under severe class imbalance,
 and how does optimizing the decision threshold against a cost function change the tradeoff
@@ -62,14 +89,25 @@ exactly once, for final reporting. Full derivation: [`RESEARCH_REPORT.md`](RESEA
 ```mermaid
 flowchart TD
     A["Data"] --> B["Train / val / test split"]
-    B --> C["LR / XGBoost / Autoencoder"]
-    C --> D["Class weighting + cost function"]
-    D --> E["Threshold optimization (val) + calibration (val)"]
+    subgraph MODEL["Predictive model — ranks transactions by fraud likelihood"]
+        B --> C["LR / XGBoost / Autoencoder"]
+        C --> D["Class weighting, or cost-weighted training (§4)"]
+    end
+    subgraph POLICY["Decision policy — turns a score into a block/allow call"]
+        D --> E["Threshold optimization (val) + calibration (val)"]
+    end
     E --> F["Production pipeline: XGBoost @ 0.09"]
     E --> G["Walk-forward + cost-uncertainty checks"]
     F --> H["Sparkov external validation"]
     F -->|"POST /predict"| I["FastAPI service"]
 ```
+
+Two boxes, not one: a **predictive model** (top) that estimates fraud likelihood, and a
+**decision policy** (bottom) that turns that estimate into a decision under an explicit cost
+function. Cost-sensitivity can enter either layer — training-time (cost-weighted sample weights)
+or decision-time (threshold tuning) — and Experiments 4/4b/4c in
+[`RESEARCH_REPORT.md`](RESEARCH_REPORT.md) are about exactly that boundary: which layer should
+carry the cost asymmetry, and what happens when both do.
 
 Every training run logs to MLflow (`mlflow ui --backend-store-uri sqlite:///mlflow.db`).
 
