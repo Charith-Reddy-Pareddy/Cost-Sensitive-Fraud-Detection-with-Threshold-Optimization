@@ -1,10 +1,13 @@
 import numpy as np
 
 from src.models.cost_engine import (
+    amount_proportional_fn_cost,
     bayes_optimal_threshold,
     cost_ratio_sensitivity_sweep,
     exact_optimal_threshold,
+    exact_optimal_threshold_variable_cost,
     expected_cost,
+    expected_cost_variable,
     optimize_threshold,
 )
 
@@ -98,6 +101,48 @@ def test_bayes_optimal_threshold_matches_closed_form():
     # missing fraud is 100x worse than a false positive -> only flag when very confident it's NOT fraud is wrong;
     # the threshold should be low, since even a small fraud probability is expensive to ignore
     assert bayes_optimal_threshold(cost_fn=500.0, cost_fp=5.0) < 0.5
+
+
+def test_amount_proportional_fn_cost_scales_with_amount_and_floors():
+    amounts = np.array([0.0, 1.0, 100.0, 10000.0])
+    costs = amount_proportional_fn_cost(amounts, loss_rate=1.0, min_cost=5.0)
+    assert list(costs) == [5.0, 5.0, 100.0, 10000.0]
+
+
+def test_expected_cost_variable_matches_flat_expected_cost_for_constant_arrays():
+    y_true = np.array([1, 1, 0, 0])
+    y_proba = np.array([0.9, 0.1, 0.9, 0.1])
+    flat = expected_cost(y_true, y_proba, threshold=0.5, cost_fn=100.0, cost_fp=10.0)
+    variable = expected_cost_variable(
+        y_true, y_proba, threshold=0.5, cost_fn=np.full(4, 100.0), cost_fp=np.full(4, 10.0)
+    )
+    assert flat == variable
+
+
+def test_expected_cost_variable_uses_actual_per_row_amount():
+    # one missed fraud: a $50 one, not the $9000 one that got caught -> cost should reflect $50
+    y_true = np.array([1, 1, 0])
+    y_proba = np.array([0.1, 0.9, 0.1])  # first fraud missed, second caught, legit correctly clear
+    amounts = np.array([50.0, 9000.0, 20.0])
+    cost_fn = amount_proportional_fn_cost(amounts, loss_rate=1.0, min_cost=0.0)
+    cost = expected_cost_variable(y_true, y_proba, threshold=0.5, cost_fn=cost_fn, cost_fp=np.full(3, 5.0))
+    assert cost == 50.0
+
+
+def test_exact_optimal_threshold_variable_cost_never_worse_than_flat_equivalent():
+    rng = np.random.default_rng(2)
+    n = 2000
+    y_true = (rng.random(n) < 0.05).astype(int)
+    y_proba = np.clip(y_true * 0.6 + rng.normal(scale=0.25, size=n) + 0.2, 0, 1)
+    amounts = rng.uniform(1, 500, size=n)
+    cost_fn = amount_proportional_fn_cost(amounts, loss_rate=1.0, min_cost=5.0)
+    cost_fp = np.full(n, 5.0)
+
+    sweep = exact_optimal_threshold_variable_cost(y_true, y_proba, cost_fn, cost_fp)
+    default_cost = expected_cost_variable(y_true, y_proba, 0.5, cost_fn, cost_fp)
+
+    assert sweep.optimal_cost <= default_cost
+    assert 0.0 <= sweep.optimal_threshold <= 1.0 + 1e-6
 
 
 def test_higher_cost_ratio_lowers_optimal_threshold():

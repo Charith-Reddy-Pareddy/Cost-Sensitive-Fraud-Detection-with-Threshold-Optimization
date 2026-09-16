@@ -125,6 +125,96 @@ def exact_optimal_threshold(
     )
 
 
+def amount_proportional_fn_cost(amount: np.ndarray, loss_rate: float = 1.0, min_cost: float = 5.0) -> np.ndarray:
+    """Per-row false-negative (missed-fraud) cost proportional to the transaction amount, instead
+    of one flat figure for every fraud regardless of size. `loss_rate` is the fraction of the
+    transaction amount assumed lost if the fraud isn't caught (1.0 = full loss, no recovery — the
+    conservative/illustrative default used here; real chargeback/recovery rates are not modeled).
+    `min_cost` floors the cost for very small transactions, representing the fixed
+    investigation/reputational cost of a missed fraud that exists even when the dollar amount is
+    trivial. Like the flat $500/$5 figures elsewhere in this project, these are illustrative
+    assumptions, not sourced fraud-loss data.
+    """
+    return np.maximum(loss_rate * np.asarray(amount, dtype=float), min_cost)
+
+
+def expected_cost_variable(
+    y_true: np.ndarray,
+    y_proba: np.ndarray,
+    threshold: float,
+    cost_fn: np.ndarray,
+    cost_fp: np.ndarray,
+) -> float:
+    """Like `expected_cost`, but `cost_fn`/`cost_fp` are per-row arrays (e.g. amount-proportional
+    costs from `amount_proportional_fn_cost`) rather than one flat dollar figure applied to every
+    row — a missed $9,000 fraud and a missed $9 fraud are not the same cost, which a single flat
+    `cost_fn` cannot represent."""
+    y_true = np.asarray(y_true)
+    y_pred = (np.asarray(y_proba) >= threshold).astype(int)
+    cost_fn = np.asarray(cost_fn, dtype=float)
+    cost_fp = np.asarray(cost_fp, dtype=float)
+    fn_mask = (y_true == 1) & (y_pred == 0)
+    fp_mask = (y_true == 0) & (y_pred == 1)
+    return float(cost_fn[fn_mask].sum() + cost_fp[fp_mask].sum())
+
+
+def exact_optimal_threshold_variable_cost(
+    y_true: np.ndarray,
+    y_proba: np.ndarray,
+    cost_fn: np.ndarray,
+    cost_fp: np.ndarray,
+) -> ThresholdSweepResult:
+    """`exact_optimal_threshold`'s O(n log n) exact search over every observed score, generalized
+    to per-row costs (see `expected_cost_variable`) instead of a single flat `cost_fn`/`cost_fp`.
+    """
+    y_true = np.asarray(y_true)
+    y_proba = np.asarray(y_proba)
+    cost_fn = np.asarray(cost_fn, dtype=float)
+    cost_fp = np.asarray(cost_fp, dtype=float)
+    n = len(y_proba)
+
+    if n == 0:
+        return ThresholdSweepResult(thresholds=np.array([]), costs=np.array([]), optimal_threshold=0.5, optimal_cost=0.0)
+
+    no_flag_cost = float(cost_fn[y_true == 1].sum())
+
+    order = np.argsort(-y_proba, kind="mergesort")
+    sorted_scores = y_proba[order]
+    sorted_labels = y_true[order]
+    sorted_fn_cost = cost_fn[order]
+    sorted_fp_cost = cost_fp[order]
+
+    # as the top-k highest-scored rows get flagged: fraud rows among them stop costing cost_fn
+    # (recovered), legit rows among them start costing cost_fp (incurred)
+    fn_cost_recovered = np.cumsum(np.where(sorted_labels == 1, sorted_fn_cost, 0.0))
+    fp_cost_incurred = np.cumsum(np.where(sorted_labels == 0, sorted_fp_cost, 0.0))
+    costs_after_k = (no_flag_cost - fn_cost_recovered) + fp_cost_incurred
+
+    is_last_of_tie_group = np.ones(n, dtype=bool)
+    is_last_of_tie_group[:-1] = sorted_scores[:-1] != sorted_scores[1:]
+
+    candidate_costs = costs_after_k[is_last_of_tie_group]
+    candidate_thresholds = sorted_scores[is_last_of_tie_group]
+
+    best_flag_idx = int(np.argmin(candidate_costs))
+    best_flag_cost = float(candidate_costs[best_flag_idx])
+    best_flag_threshold = float(candidate_thresholds[best_flag_idx])
+
+    if no_flag_cost <= best_flag_cost:
+        optimal_cost = no_flag_cost
+        optimal_threshold = float(sorted_scores[0]) + 1e-9
+    else:
+        optimal_cost = best_flag_cost
+        optimal_threshold = best_flag_threshold
+
+    return ThresholdSweepResult(
+        thresholds=candidate_thresholds[::-1],
+        costs=candidate_costs[::-1],
+        optimal_threshold=optimal_threshold,
+        optimal_cost=optimal_cost,
+    )
+
+
 def bayes_optimal_threshold(
     cost_fn: float = DEFAULT_COST_FALSE_NEGATIVE,
     cost_fp: float = DEFAULT_COST_FALSE_POSITIVE,
