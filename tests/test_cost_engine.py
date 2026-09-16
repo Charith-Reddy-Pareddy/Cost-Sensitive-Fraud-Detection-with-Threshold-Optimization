@@ -1,6 +1,12 @@
 import numpy as np
 
-from src.models.cost_engine import cost_ratio_sensitivity_sweep, expected_cost, optimize_threshold
+from src.models.cost_engine import (
+    bayes_optimal_threshold,
+    cost_ratio_sensitivity_sweep,
+    exact_optimal_threshold,
+    expected_cost,
+    optimize_threshold,
+)
 
 
 def test_expected_cost_counts_fn_and_fp_correctly():
@@ -46,6 +52,52 @@ def test_optimize_threshold_picks_the_minimum_not_the_maximum():
 
     assert sweep.optimal_threshold == 0.5
     assert sweep.optimal_cost == 0.0
+
+
+def test_exact_optimal_threshold_never_worse_than_101_point_grid():
+    rng = np.random.default_rng(1)
+    n = 3000
+    y_true = (rng.random(n) < 0.05).astype(int)
+    y_proba = np.clip(y_true * 0.6 + rng.normal(scale=0.25, size=n) + 0.2, 0, 1)
+
+    grid_sweep = optimize_threshold(y_true, y_proba, cost_fn=500.0, cost_fp=5.0)
+    exact_sweep = exact_optimal_threshold(y_true, y_proba, cost_fn=500.0, cost_fp=5.0)
+
+    # the exact search checks every achievable threshold, so it can only match or beat a grid
+    assert exact_sweep.optimal_cost <= grid_sweep.optimal_cost
+
+
+def test_exact_optimal_threshold_finds_minimum_a_coarse_grid_straddles():
+    # scores land at 0.501 and 0.499 either side of the true break; a 101-point grid (step 0.01)
+    # never lands there and picks a worse threshold on one side or the other
+    y_true = np.array([1, 1, 1, 0, 0, 0])
+    y_proba = np.array([0.9, 0.7, 0.501, 0.499, 0.3, 0.1])
+
+    exact_sweep = exact_optimal_threshold(y_true, y_proba, cost_fn=10.0, cost_fp=10.0)
+    grid_sweep = optimize_threshold(y_true, y_proba, cost_fn=10.0, cost_fp=10.0)
+
+    assert exact_sweep.optimal_cost == 0.0  # perfectly separable at 0.501
+    assert exact_sweep.optimal_cost <= grid_sweep.optimal_cost
+
+
+def test_exact_optimal_threshold_handles_tied_scores():
+    # two frauds and one legit transaction share the exact same score; a threshold can't flag
+    # one without flagging all three, so the achievable minimum isn't zero
+    y_true = np.array([1, 1, 0, 0])
+    y_proba = np.array([0.5, 0.5, 0.5, 0.1])
+
+    sweep = exact_optimal_threshold(y_true, y_proba, cost_fn=10.0, cost_fp=10.0)
+
+    # flag all three at 0.5: 0 FN, 1 FP -> cost 10; flag nobody: 2 FN -> cost 20
+    assert sweep.optimal_cost == 10.0
+
+
+def test_bayes_optimal_threshold_matches_closed_form():
+    assert bayes_optimal_threshold(cost_fn=500.0, cost_fp=5.0) == 5.0 / 505.0
+    assert bayes_optimal_threshold(cost_fn=5.0, cost_fp=5.0) == 0.5
+    # missing fraud is 100x worse than a false positive -> only flag when very confident it's NOT fraud is wrong;
+    # the threshold should be low, since even a small fraud probability is expensive to ignore
+    assert bayes_optimal_threshold(cost_fn=500.0, cost_fp=5.0) < 0.5
 
 
 def test_higher_cost_ratio_lowers_optimal_threshold():

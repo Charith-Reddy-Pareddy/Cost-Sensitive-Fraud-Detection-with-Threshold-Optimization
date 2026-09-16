@@ -59,6 +59,90 @@ def optimize_threshold(
     )
 
 
+def exact_optimal_threshold(
+    y_true: np.ndarray,
+    y_proba: np.ndarray,
+    cost_fn: float = DEFAULT_COST_FALSE_NEGATIVE,
+    cost_fp: float = DEFAULT_COST_FALSE_POSITIVE,
+) -> ThresholdSweepResult:
+    """Find the cost-minimizing threshold exactly, in O(n log n), instead of checking a fixed
+    grid. `expected_cost` is a step function of the threshold that can only change value at a
+    predicted score itself (since predictions use `proba >= threshold`), so the true minimum is
+    guaranteed to sit at one of the observed scores — a grid can straddle it and miss it entirely
+    if no grid point lands close enough. This function checks every one of those candidate
+    thresholds by sorting scores once and tracking cumulative FN/FP counts, rather than
+    recomputing the confusion matrix from scratch at each of a fixed number of grid points.
+    """
+    y_true = np.asarray(y_true)
+    y_proba = np.asarray(y_proba)
+    n = len(y_proba)
+
+    n_fraud = int((y_true == 1).sum())
+    n_legit = n - n_fraud
+
+    if n == 0:
+        return ThresholdSweepResult(thresholds=np.array([]), costs=np.array([]), optimal_threshold=0.5, optimal_cost=0.0)
+
+    # threshold above every score: nobody flagged -> all fraud is a false negative
+    no_flag_cost = n_fraud * cost_fn
+
+    order = np.argsort(-y_proba, kind="mergesort")  # descending, stable so ties keep dataset order
+    sorted_scores = y_proba[order]
+    sorted_labels = y_true[order]
+
+    # after flagging the top k scores as positive: FN = fraud not yet flagged, FP = legit flagged
+    cum_fraud_flagged = np.cumsum(sorted_labels == 1)
+    cum_legit_flagged = np.cumsum(sorted_labels == 0)
+    fn_counts = n_fraud - cum_fraud_flagged
+    fp_counts = cum_legit_flagged
+    costs_after_k = fn_counts * cost_fn + fp_counts * cost_fp
+
+    # tied scores must move together under a single threshold (>=), so only the last position in
+    # each run of equal scores is a valid candidate — flagging some but not all tied scores isn't
+    # achievable by any single threshold value.
+    is_last_of_tie_group = np.ones(n, dtype=bool)
+    is_last_of_tie_group[:-1] = sorted_scores[:-1] != sorted_scores[1:]
+
+    candidate_costs = costs_after_k[is_last_of_tie_group]
+    candidate_thresholds = sorted_scores[is_last_of_tie_group]
+
+    best_flag_idx = int(np.argmin(candidate_costs))
+    best_flag_cost = float(candidate_costs[best_flag_idx])
+    best_flag_threshold = float(candidate_thresholds[best_flag_idx])
+
+    if no_flag_cost <= best_flag_cost:
+        optimal_cost = no_flag_cost
+        optimal_threshold = float(sorted_scores[0]) + 1e-9  # just above the highest score
+    else:
+        optimal_cost = best_flag_cost
+        optimal_threshold = best_flag_threshold
+
+    return ThresholdSweepResult(
+        thresholds=candidate_thresholds[::-1],
+        costs=candidate_costs[::-1],
+        optimal_threshold=optimal_threshold,
+        optimal_cost=optimal_cost,
+    )
+
+
+def bayes_optimal_threshold(
+    cost_fn: float = DEFAULT_COST_FALSE_NEGATIVE,
+    cost_fp: float = DEFAULT_COST_FALSE_POSITIVE,
+) -> float:
+    """The theoretical cost-minimizing threshold under perfectly calibrated probabilities.
+
+    Flagging a transaction with true fraud probability p as positive costs (1-p)*cost_fp in
+    expectation (the legitimate-transaction case); not flagging it costs p*cost_fn (the missed-
+    fraud case). Flagging is the better decision exactly when p*cost_fn > (1-p)*cost_fp, which
+    solves to p > cost_fp / (cost_fn + cost_fp). This threshold is optimal *if and only if* the
+    model's predicted probabilities are well-calibrated — P(y=1 | score=s) actually equals s. A
+    raw classifier's scores are typically not calibrated (see the calibration comparison in
+    run_calibration_analysis.py), which is exactly why the empirical optimum found by
+    `exact_optimal_threshold` on raw scores can diverge from this value.
+    """
+    return cost_fp / (cost_fn + cost_fp)
+
+
 def cost_ratio_sensitivity_sweep(
     y_true: np.ndarray,
     y_proba: np.ndarray,
