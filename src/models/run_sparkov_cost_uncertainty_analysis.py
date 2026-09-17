@@ -11,7 +11,7 @@ import pandas as pd
 from xgboost import XGBClassifier
 
 from src.data.ingest_sparkov import TARGET_COLUMN
-from src.models.cost_engine import optimize_threshold
+from src.models.cost_engine import exact_optimal_threshold
 from src.models.run_sparkov_bootstrap_analysis import PROCESSED_DIR
 
 FIGURES_DIR = PROCESSED_DIR.parents[2] / "reports" / "figures"
@@ -49,7 +49,7 @@ def main() -> None:
 
     thresholds = np.empty(N_DRAWS)
     for i in range(N_DRAWS):
-        sweep = optimize_threshold(y_val_arr, val_proba, cost_fn=cost_fn_draws[i], cost_fp=cost_fp_draws[i])
+        sweep = exact_optimal_threshold(y_val_arr, val_proba, cost_fn_draws[i], cost_fp_draws[i])
         thresholds[i] = sweep.optimal_threshold
 
     print(f"cost_fn ~ Uniform{COST_FN_RANGE}, cost_fp ~ Uniform{COST_FP_RANGE}, {N_DRAWS} draws")

@@ -15,7 +15,7 @@ import numpy as np
 import pandas as pd
 
 from src.features.pipeline import RAW_FEATURE_COLUMNS, TARGET_COLUMN
-from src.models.cost_engine import optimize_threshold
+from src.models.cost_engine import exact_optimal_threshold
 from src.models.imbalance_comparison import build_pipeline
 
 PROCESSED_DIR = Path(__file__).resolve().parents[2] / "data" / "processed"
@@ -47,7 +47,7 @@ def main() -> None:
 
     thresholds = np.empty(N_DRAWS)
     for i in range(N_DRAWS):
-        sweep = optimize_threshold(y_val_arr, val_proba, cost_fn=cost_fn_draws[i], cost_fp=cost_fp_draws[i])
+        sweep = exact_optimal_threshold(y_val_arr, val_proba, cost_fn_draws[i], cost_fp_draws[i])
         thresholds[i] = sweep.optimal_threshold
 
     print(f"cost_fn ~ Uniform{COST_FN_RANGE}, cost_fp ~ Uniform{COST_FP_RANGE}, {N_DRAWS} draws")
