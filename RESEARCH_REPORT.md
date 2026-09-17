@@ -153,19 +153,30 @@ times; for each draw, the cost-optimal threshold is selected on val.
 
 ![Cost uncertainty threshold distribution](reports/figures/cost_uncertainty_threshold_distribution.png)
 
-| Statistic | Value |
-|---|---|
-| Mean | 0.151 |
-| Std. dev. | 0.178 |
-| Median | 0.090 |
-| IQR | [0.090, 0.240] |
-| Range | [0.010, 0.750] |
+Now exact search (Days 1–3 of the propagation described in Future work), not the 101-point grid:
+
+| Statistic | Value (exact search) | Value (grid, for comparison) |
+|---|---|---|
+| Mean | 0.141 | 0.151 |
+| Std. dev. | 0.187 | 0.178 |
+| Median | 0.092 | 0.090 |
+| IQR | [0.020, 0.092] | [0.090, 0.240] |
+| Range | [0.008, 0.773] | [0.010, 0.750] |
 
 The distribution is multi-modal — thresholds cluster at a handful of plateaus rather than
 varying smoothly, itself a consequence of how few fraud examples (59) are in the validation
-split. The median (0.090) matches the point-estimate result from the $500/$5 scenario, which is
-reassuring, but the spread (0.01 to 0.75) means a materially different but still plausible cost
-assumption would have picked a very different operating point.
+split. Mean, median, and range barely moved between the grid and exact search, but the IQR
+shifted meaningfully lower and tightened (both bounds roughly halved) — the *typical* draw now
+picks a noticeably more aggressive threshold than the grid found, even though the extremes of the
+distribution are about the same. **The median (0.092) no longer matches the exact-search
+point-estimate result from the $500/$5 scenario (0.020, §1b)** — under the grid, both calculations
+agreed (0.090 for both), which this report previously read as "reassuring." That agreement turns
+out to have been coincidental: the $500/$5 scenario is one specific point (cost ratio 100) inside
+a distribution spanning roughly ratio 5 to ratio 1000, and there's no reason its point estimate
+should equal the whole distribution's median — the grid just happened to produce the same value
+for both by chance. The wider lesson: the spread itself (0.008 to 0.773) still means a materially
+different but still plausible cost assumption would pick a very different operating point, and if
+anything that conclusion is reinforced, not weakened, by exact search.
 
 ### 4. Does training-time cost-sensitivity add anything over threshold tuning?
 
@@ -381,19 +392,25 @@ time ([`src/models/run_sparkov_cost_uncertainty_analysis.py`](src/models/run_spa
 
 ![Sparkov cost uncertainty threshold distribution](reports/figures/sparkov_cost_uncertainty_threshold_distribution.png)
 
-| Statistic | Primary dataset | Sparkov |
+| Statistic | Primary dataset (exact search) | Sparkov (exact search) |
 |---|---|---|
-| Mean | 0.151 | 0.606 |
-| Median | 0.090 | 0.600 |
-| Range | [0.010, 0.750] | [0.110, 0.870] |
+| Mean | 0.141 | 0.606 |
+| Median | 0.092 | 0.602 |
+| Range | [0.008, 0.773] | [0.115, 0.924] |
 
 **The character of the sensitivity is genuinely different, not just the numbers.** On the
 primary dataset the threshold swings toward the aggressive end (near 0) as costs vary — a weak
 model needs a low bar to catch fraud at all. On Sparkov it stays anchored in the 0.5–0.7 range
 across nearly every draw — consistent with Experiments 5a–5c: a near-perfect model (PR-AUC
 0.969) has much less to gain from moving the threshold around, regardless of the assumed cost
-ratio. All five Sparkov robustness checks now point the same direction: the stronger the raw
-signal, the less any of this cost-sensitive machinery has left to contribute.
+ratio. **Sparkov's numbers are essentially unchanged from the old grid-based run (mean 0.606→0.606,
+median 0.600→0.602)**, while the primary dataset's did shift (§3) — a third, independent piece of
+evidence for the same explanation: a near-perfect model has so little room left for the decision
+threshold to matter that whether the search that picks it is coarse or exact barely registers,
+while a weaker model (the primary dataset) is sensitive to both the cost assumption *and* the
+precision of the search itself. All five Sparkov robustness checks now point the same direction:
+the stronger the raw signal, the less any of this cost-sensitive machinery has left to
+contribute — methodology included.
 
 #### 5e. Row-level vs. card-level bootstrap: does clustering change the Sparkov intervals?
 
@@ -632,7 +649,7 @@ noisier region of the cost curve, so bootstrap resampling swings the outcome mor
 estimate and a wider confidence interval are not in tension — both are real properties of the
 same threshold. Combined with the walk-forward result (1 improved, 3 worsened, of 4 folds —
 now also exact-search, and *worse* than the grid-based 1/4 improved, 1/4 tied, 2/4 worsened) and
-the cost-uncertainty spread (still grid-based), the honest summary is unchanged and if anything
+the cost-uncertainty spread (now also exact-search, §3), the honest summary is unchanged and if anything
 reinforced: **on this dataset, cost-sensitive
 threshold optimization has a positive expected effect but is not a reliably-winning
 intervention** — its benefit is real on average but small relative to the noise in a
@@ -663,12 +680,16 @@ intervention** — its benefit is real on average but small relative to the nois
 - **In progress:** propagate exact threshold search (§1b) past the headline comparison to every
   number that currently uses the 101-point grid, so the whole report shares one consistent,
   un-discretized basis instead of a mix. Status: the production model, its bootstrap CI
-  (Statistical analysis, above), and walk-forward evaluation (Experiment 2) have switched to
-  exact search — walk-forward's result changed materially as a result (see Experiment 2: exact
-  search *worsened* cross-fold stability, the opposite of the bootstrap's improvement, a genuine
-  and unresolved tension worth noting explicitly rather than averaging away). The cost-ratio
-  sensitivity sweep, calibration analysis, the ablation study, and the training-objective
-  comparison are still grid-based and queued next.
+  (Statistical analysis, above), walk-forward evaluation (Experiment 2), and the cost-ratio
+  *uncertainty* sweep (Experiment 3 and §5d, the 500-draw Monte Carlo one) have switched to exact
+  search. Walk-forward's result changed materially (exact search *worsened* cross-fold stability,
+  the opposite of the bootstrap's improvement — a genuine, unresolved tension); the cost-ratio
+  uncertainty sweep's central tendency barely moved but its IQR tightened and shifted lower, and
+  it broke an apparent agreement with the §1b point estimate that turns out to have been
+  coincidental (§3). The *fixed*-ratio cost sensitivity sweep (`run_cost_analysis.py`'s
+  `cost_ratio_sensitivity_sweep`, a different function from the uncertainty sweep above),
+  calibration analysis, the ablation study, and the training-objective comparison are still
+  grid-based and queued next.
 - Diagnose the LightGBM anomaly from §7 (PR-AUC ≈0.02-0.05 on this dataset vs. 0.82 for
   XGBoost under identical no-weighting conditions, not reproduced on synthetic data at a
   matched imbalance ratio) rather than leaving it excluded.

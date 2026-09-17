@@ -177,10 +177,11 @@ than double. The grid was a discretization choice, not a limit of the method; se
 [`RESEARCH_REPORT.md §1b`](RESEARCH_REPORT.md#1b-is-the-grid-itself-limiting-the-result) for the
 full comparison.
 
-**Migration in progress:** the production model, its bootstrap CI, and walk-forward evaluation
-(below) now use exact threshold search as of days 1–2 of an ongoing propagation; the cost-ratio
-uncertainty sweep below still selects thresholds from the 101-point grid pending a later day of
-that same migration, so its threshold values aren't yet on a common basis with the other two —
+**Migration in progress:** the production model, its bootstrap CI, walk-forward evaluation, and
+the cost-ratio uncertainty sweep (below) now use exact threshold search as of days 1–3 of an
+ongoing propagation; the *fixed*-ratio cost sensitivity sweep above (a different, separate sweep
+from the uncertainty one below), calibration analysis, the ablation study, and the
+training-objective comparison are still grid-based, pending later days of the same migration —
 flagged here rather than left implicit. See [`RESEARCH_REPORT.md` Future work](RESEARCH_REPORT.md#future-work).
 
 ### Is any of this robust?
@@ -195,8 +196,12 @@ flagged here rather than left implicit. See [`RESEARCH_REPORT.md` Future work](R
   validation half more tightly, including that fold's noise, and the coarser grid had been
   acting as accidental regularization against exactly that. Threshold swing across windows also
   widened, from [0.04, 0.62] to [0.0063, 0.78].
-- **Cost-ratio uncertainty (500 draws, still grid-based, cost_fn~U(100,1000), cost_fp~U(1,20)):**
-  median threshold 0.09 matches the grid point estimate, but the range is [0.01, 0.75].
+- **Cost-ratio uncertainty (500 draws, now exact-search, cost_fn~U(100,1000), cost_fp~U(1,20)):**
+  median threshold 0.09, range [0.01, 0.77] — mean/median/range barely moved from the old grid
+  result, but the IQR tightened and shifted lower ([0.02, 0.09] vs. the grid's [0.09, 0.24]), and
+  the median no longer matches the exact-search point estimate for the $500/$5 scenario (0.02) —
+  that earlier agreement was a coincidence of the grid, not a real relationship. Full breakdown:
+  [`RESEARCH_REPORT.md §3`](RESEARCH_REPORT.md#3-is-the-selected-threshold-robust-to-uncertainty-in-the-assumed-cost-ratio).
 - **Bootstrap (1,000 resamples, now exact-search):** cost reduction 5.2%, 95% CI
   **[−24.6%, 29.1%]** — crosses zero, and a wider interval than the old grid-based bootstrap
   ([−9.3%, 18.7%]) despite the better point estimate: the exact-search threshold (0.02) is more
