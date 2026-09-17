@@ -102,12 +102,17 @@ absolute gap in a region where the cost curve is extremely steep translates into
 difference, and this specific divergence is itself evidence the raw XGBoost scores are not
 well-calibrated probabilities. That is investigated directly in the calibration comparison below.
 
-**Scope note:** this finer/exact search is not yet adopted as the standard in the rest of this
-report — the bootstrap CI, walk-forward evaluation, and cost-ratio sensitivity sweep below all
-still select thresholds from the 101-point grid, for consistency with each other and with the
-original leakage-fix analysis. Re-running that full suite with the exact search is listed under
-Future work; this section exists to make clear that doing so would very likely widen the reported
-benefit, not shrink it.
+**Scope note (updated as the propagation below progresses):** exact search is now the standard
+for the production model, its bootstrap CI, and walk-forward evaluation (Days 1–2 of the
+migration described in Future work). The cost-ratio sensitivity sweep below still selects
+thresholds from the 101-point grid, pending a later day. An earlier version of this note
+predicted that propagating exact search "would very likely widen the reported benefit, not
+shrink it" — that held for the bootstrap point estimate (2.4%→5.17%) but **not** for walk-forward
+stability, which got *worse* under exact search (2 of 4 folds worsened under the grid, 3 of 4
+under exact search — see Experiment 2). The corrected expectation: exact search improves the
+single-split point estimate but does not reliably improve — and can actively hurt —
+cross-fold generalization, because it fits each validation split more tightly, including its
+noise.
 
 ### 2. Is the result stable across time windows? (walk-forward evaluation)
 
@@ -117,19 +122,28 @@ second half — so training data only ever grows forward in time.
 
 | Fold | Train rows | Threshold (val) | Default cost (test) | Optimized cost (test) | Result |
 |---|---|---|---|---|---|
-| 1 | 56,961 | 0.04 | $4,520 | $4,340 | improved |
-| 2 | 113,922 | 0.62 | $5,180 | $5,665 | worsened |
-| 3 | 170,884 | 0.56 | $4,015 | $4,015 | tied |
-| 4 | 227,845 | 0.05 | $3,060 | $3,840 | worsened |
+| 1 | 56,961 | 0.0063 | $4,520 | $5,600 | worsened |
+| 2 | 113,922 | 0.7781 | $5,180 | $6,625 | worsened |
+| 3 | 170,884 | 0.7128 | $4,015 | $4,005 | improved |
+| 4 | 227,845 | 0.0556 | $3,060 | $3,765 | worsened |
 
-**The optimized threshold improved cost in 1 of 4 folds, tied in 1, and made it worse in the
-other 2** — an earlier version of this report collapsed the tied fold into "beats" (`<=`
-comparison) and reported "2 of 4," which overstates how often the optimized threshold actually
-did better than default; a tie is not a win. The selected threshold itself swings from 0.04 to
-0.62 across windows. This dataset covers a single day, so it cannot test genuine multi-day
-concept drift — that limitation is real and unavoidable here — but it does show the conclusion
-is not stable even across different windows of a single day. A single-split result
-(Experiment 1) looked like a clean win; four splits show, at best, a coin flip.
+**The optimized threshold (exact search, as of the ongoing propagation described in Future work)
+improved cost in 1 of 4 folds and made it worse in the other 3.** This table used to run on the
+101-point grid and read improved 1/4, tied 1/4, worsened 2/4 — switching to exact search made
+walk-forward *stability worse*, not better, losing the one tied fold entirely. That's a real,
+counterintuitive finding worth sitting with: exact search improved the single-split headline
+result (§1b, 2.4%→5.17%) precisely because it can fit that one validation half more tightly, but
+the same tighter fit generalizes *worse* on average across four independent folds. The grid's
+coarseness was accidentally acting as a mild regularizer against picking a threshold that overfits
+one particular validation half; removing that discretization helps the lucky split and hurts the
+unlucky ones. The selected threshold itself now swings even more widely across windows — 0.0063
+to 0.7781, versus 0.04 to 0.62 under the grid — which is itself further evidence of the same
+overfitting: exact search is free to chase each fold's validation noise all the way to its edges.
+This dataset covers a single day, so it cannot test genuine multi-day concept drift — that
+limitation is real and unavoidable here — but it does show the conclusion is not stable even
+across different windows of a single day. A single-split result (Experiment 1) looked like a
+clean win; four independent splits show it's worse than a coin flip, and a *better* threshold
+search makes that worse, not better.
 
 ### 3. Is the selected threshold robust to uncertainty in the assumed cost ratio?
 
@@ -616,9 +630,10 @@ bootstrap did ([−9.3%, 18.7%] at threshold 0.09) — despite the better point 
 cost of 164 more false alarms (§ production model), and that operating point sits in a steeper,
 noisier region of the cost curve, so bootstrap resampling swings the outcome more. A better point
 estimate and a wider confidence interval are not in tension — both are real properties of the
-same threshold. Combined with the walk-forward result (1 improved, 1 tied, 2 worsened, of 4
-folds — still grid-based, not yet re-run with exact search) and the cost-uncertainty spread, the
-honest summary is unchanged and if anything reinforced: **on this dataset, cost-sensitive
+same threshold. Combined with the walk-forward result (1 improved, 3 worsened, of 4 folds —
+now also exact-search, and *worse* than the grid-based 1/4 improved, 1/4 tied, 2/4 worsened) and
+the cost-uncertainty spread (still grid-based), the honest summary is unchanged and if anything
+reinforced: **on this dataset, cost-sensitive
 threshold optimization has a positive expected effect but is not a reliably-winning
 intervention** — its benefit is real on average but small relative to the noise in a
 492-fraud-row dataset.
@@ -647,11 +662,13 @@ intervention** — its benefit is real on average but small relative to the nois
   rather than sample-weighting) as a fifth training-objective configuration.
 - **In progress:** propagate exact threshold search (§1b) past the headline comparison to every
   number that currently uses the 101-point grid, so the whole report shares one consistent,
-  un-discretized basis instead of a mix. Status: the production model and its bootstrap CI
-  (Statistical analysis, above) switched to exact search first, since every other consumer
-  (serving, the confusion matrix/ROC/PR figures) reads the threshold from that one trained
-  artifact. Walk-forward, the cost-ratio sensitivity sweep, calibration analysis, the ablation
-  study, and the training-objective comparison are still grid-based and queued next.
+  un-discretized basis instead of a mix. Status: the production model, its bootstrap CI
+  (Statistical analysis, above), and walk-forward evaluation (Experiment 2) have switched to
+  exact search — walk-forward's result changed materially as a result (see Experiment 2: exact
+  search *worsened* cross-fold stability, the opposite of the bootstrap's improvement, a genuine
+  and unresolved tension worth noting explicitly rather than averaging away). The cost-ratio
+  sensitivity sweep, calibration analysis, the ablation study, and the training-objective
+  comparison are still grid-based and queued next.
 - Diagnose the LightGBM anomaly from §7 (PR-AUC ≈0.02-0.05 on this dataset vs. 0.82 for
   XGBoost under identical no-weighting conditions, not reproduced on synthetic data at a
   matched imbalance ratio) rather than leaving it excluded.

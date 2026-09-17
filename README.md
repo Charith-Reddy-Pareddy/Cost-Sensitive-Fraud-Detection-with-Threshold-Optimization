@@ -31,7 +31,7 @@ cost asymmetry applied at decision time aren't complementary here — they subst
 actively undermine, each other.
 
 **Honest limitation.** The headline "does threshold optimization help" result doesn't reliably
-replicate: it's a coin flip across time windows on the primary dataset (1 improved, 1 tied, 2
+replicate: it's worse than a coin flip across time windows on the primary dataset (1 improved, 3
 worsened of 4 walk-forward folds), its 95% bootstrap CI crosses zero, and it doesn't replicate at
 all on a second, structurally different dataset. This project reports that plainly rather than
 picking the split that looks best.
@@ -53,7 +53,7 @@ is the short version.
 | Best model | XGBoost (class-weighted) |
 | Cost-optimal threshold (val-selected, exact search, $500/$5 illustrative costs) | 0.02 |
 | Cost reduction vs. default (untouched test) | 5.2% (95% CI: −24.6% to 29.1%) |
-| Walk-forward result (4 windows) | 1 improved, 1 tied, 2 worsened |
+| Walk-forward result (4 windows, exact search) | 1 improved, 0 tied, 3 worsened |
 | Replicates on a second dataset (Sparkov) | **No** |
 | Inference latency | 1.42ms p50 / 2.14ms p95 |
 
@@ -177,19 +177,24 @@ than double. The grid was a discretization choice, not a limit of the method; se
 [`RESEARCH_REPORT.md §1b`](RESEARCH_REPORT.md#1b-is-the-grid-itself-limiting-the-result) for the
 full comparison.
 
-**Migration in progress:** the production model and its bootstrap CI (below) now use exact
-threshold search as of the day-1 slice of an ongoing propagation; walk-forward and cost-ratio
-uncertainty below still select thresholds from the 101-point grid pending later days of that
-same migration, so the threshold values across these three checks aren't yet on a common basis
-— flagged here rather than left implicit. See [`RESEARCH_REPORT.md` Future work](RESEARCH_REPORT.md#future-work).
+**Migration in progress:** the production model, its bootstrap CI, and walk-forward evaluation
+(below) now use exact threshold search as of days 1–2 of an ongoing propagation; the cost-ratio
+uncertainty sweep below still selects thresholds from the 101-point grid pending a later day of
+that same migration, so its threshold values aren't yet on a common basis with the other two —
+flagged here rather than left implicit. See [`RESEARCH_REPORT.md` Future work](RESEARCH_REPORT.md#future-work).
 
 ### Is any of this robust?
 
 ![Cost uncertainty threshold distribution](reports/figures/cost_uncertainty_threshold_distribution.png)
 
-- **Walk-forward (4 time windows, still grid-based):** optimized threshold improved cost in 1/4
-  folds, tied in 1/4, and made it worse in 2/4; the threshold itself swings from 0.04 to 0.62
-  across windows.
+- **Walk-forward (4 time windows, now exact-search):** optimized threshold improved cost in 1/4
+  folds and made it worse in 3/4 — *worse* than the old grid-based result (1/4 improved, 1/4
+  tied, 2/4 worsened), which lost its one tied fold under exact search. This is the opposite of
+  what the single-split result predicted: exact search improved the headline point estimate
+  (2.4%→5.2%) but made cross-fold generalization worse, not better — it fits each fold's
+  validation half more tightly, including that fold's noise, and the coarser grid had been
+  acting as accidental regularization against exactly that. Threshold swing across windows also
+  widened, from [0.04, 0.62] to [0.0063, 0.78].
 - **Cost-ratio uncertainty (500 draws, still grid-based, cost_fn~U(100,1000), cost_fp~U(1,20)):**
   median threshold 0.09 matches the grid point estimate, but the range is [0.01, 0.75].
 - **Bootstrap (1,000 resamples, now exact-search):** cost reduction 5.2%, 95% CI
@@ -243,7 +248,7 @@ Same protocol and costs, applied to Sparkov
 | Class weighting | helps marginally | **hurts** (0.909→0.882) | — |
 | Threshold optimization | +5.2% cost reduction (exact search) | no effect (0%) | **−1.8%** (worse) |
 | Cost-reduction 95% CI | [−24.6%, 29.1%] | [0.0%, 0.0%] | [−9.1%, 1.5%] |
-| Walk-forward: improved / tied / worsened | 1 / 1 / 2 | 2 / 0 / 2 | **1 / 0 / 3** |
+| Walk-forward: improved / tied / worsened | 1 / 0 / 3 | 2 / 0 / 2 | **1 / 0 / 3** |
 | Cost-weighted training beats tuning | yes | — | **yes** |
 | Cost-ratio-uncertainty median threshold | 0.09 | — | 0.60 (anchored, not swinging) |
 
