@@ -11,7 +11,7 @@ import pandas as pd
 from xgboost import XGBClassifier
 
 from src.data.ingest_sparkov import TARGET_COLUMN, engineer_features, load_raw
-from src.models.cost_engine import DEFAULT_COST_FALSE_NEGATIVE, DEFAULT_COST_FALSE_POSITIVE, expected_cost, optimize_threshold
+from src.models.cost_engine import DEFAULT_COST_FALSE_NEGATIVE, DEFAULT_COST_FALSE_POSITIVE, exact_optimal_threshold, expected_cost
 
 N_BLOCKS = 5
 
@@ -56,7 +56,7 @@ def main() -> None:
         val_proba = pipeline.predict_proba(X_val)[:, 1]
         test_proba = pipeline.predict_proba(X_test)[:, 1]
 
-        sweep = optimize_threshold(y_val, val_proba, cost_fn=DEFAULT_COST_FALSE_NEGATIVE, cost_fp=DEFAULT_COST_FALSE_POSITIVE)
+        sweep = exact_optimal_threshold(y_val, val_proba, DEFAULT_COST_FALSE_NEGATIVE, DEFAULT_COST_FALSE_POSITIVE)
         default_cost = expected_cost(y_test, test_proba, 0.5, DEFAULT_COST_FALSE_NEGATIVE, DEFAULT_COST_FALSE_POSITIVE)
         optimal_cost = expected_cost(
             y_test, test_proba, sweep.optimal_threshold, DEFAULT_COST_FALSE_NEGATIVE, DEFAULT_COST_FALSE_POSITIVE
@@ -82,7 +82,7 @@ def main() -> None:
         n_improved += result == "improved"
         n_tied += result == "tied"
         n_worsened += result == "worsened"
-        print(f"| {k} | {n_train} | {threshold:.2f} | ${default_cost:,.2f} | ${optimal_cost:,.2f} | {result} |")
+        print(f"| {k} | {n_train} | {threshold:.4f} | ${default_cost:,.2f} | ${optimal_cost:,.2f} | {result} |")
 
     print(f"\noptimized threshold: improved {n_improved}/{n_valid}, tied {n_tied}/{n_valid}, worsened {n_worsened}/{n_valid} valid folds")
 
