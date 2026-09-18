@@ -165,9 +165,9 @@
 
 <div class="stat-grid">
   <div class="stat"><div class="label">Best model</div><div class="value">XGBoost</div><div class="sub">class-weighted</div></div>
-  <div class="stat"><div class="label">Cost-optimal threshold</div><div class="value">0.09</div><div class="sub">selected on validation</div></div>
-  <div class="stat good"><div class="label">Cost reduction vs. default</div><div class="value">2.4%</div><div class="sub">95% CI: −9.3% to 18.7%</div></div>
-  <div class="stat"><div class="label">Beat default, walk-forward</div><div class="value">2 / 4</div><div class="sub">time windows</div></div>
+  <div class="stat"><div class="label">Cost-optimal threshold</div><div class="value">0.02</div><div class="sub">selected on validation, exact search</div></div>
+  <div class="stat good"><div class="label">Cost reduction vs. default</div><div class="value">5.2%</div><div class="sub">95% CI: −24.6% to 29.1%</div></div>
+  <div class="stat"><div class="label">Improved, walk-forward</div><div class="value">1 / 4</div><div class="sub">windows (3 worsened)</div></div>
   <div class="stat bad"><div class="label">Replicates on Sparkov?</div><div class="value">No</div><div class="sub">external validation</div></div>
   <div class="stat good"><div class="label">Inference latency</div><div class="value">1.42ms</div><div class="sub">p50 · 2.14ms p95</div></div>
 </div>
@@ -178,12 +178,12 @@
 <section>
   <h2>How the model detects fraud</h2>
   <p class="note">
-    Production model (class-weighted XGBoost @ 0.09), real untouched test set — 42,721
-    transactions, 52 fraud (0.17%). Accuracy alone is meaningless here: predicting "not fraud"
-    every time scores 99.8%.
+    Production model (class-weighted XGBoost @ 0.02, exact threshold search), real untouched
+    test set — 42,721 transactions, 52 fraud (0.17%). Accuracy alone is meaningless here:
+    predicting "not fraud" every time scores 99.8%.
   </p>
   <div class="fig-row">
-    <figure class="fig"><img src="figures/confusion_matrix.png" alt="Confusion matrix"><figcaption>40 of 52 fraud caught, 83 false alarms out of 42,669 legitimate</figcaption></figure>
+    <figure class="fig"><img src="figures/confusion_matrix.png" alt="Confusion matrix"><figcaption>42 of 52 fraud caught, 247 false alarms out of 42,669 legitimate</figcaption></figure>
     <figure class="fig"><img src="figures/roc_curve.png" alt="ROC curve"><figcaption>ROC-AUC 0.983</figcaption></figure>
     <figure class="fig"><img src="figures/pr_curve.png" alt="Precision-recall curve"><figcaption>PR-AUC 0.758 — the metric that actually matters at this imbalance</figcaption></figure>
   </div>
@@ -204,19 +204,19 @@
   </p>
   <div class="explorer">
     <div class="explorer-readout">
-      <div class="stat"><div class="label">Threshold</div><div class="value" id="ex-threshold">0.09</div></div>
+      <div class="stat"><div class="label">Threshold</div><div class="value" id="ex-threshold">0.02</div></div>
       <div class="stat"><div class="label">Precision</div><div class="value" id="ex-precision">—</div></div>
       <div class="stat"><div class="label">Recall</div><div class="value" id="ex-recall">—</div></div>
       <div class="stat"><div class="label">False positives</div><div class="value" id="ex-fp">—</div></div>
       <div class="stat"><div class="label">Missed fraud</div><div class="value" id="ex-fn">—</div></div>
       <div class="stat good"><div class="label">Expected cost</div><div class="value" id="ex-cost">—</div></div>
     </div>
-    <input type="range" id="ex-slider" min="0" max="100" step="1" value="9" class="explorer-slider">
+    <input type="range" id="ex-slider" min="0" max="100" step="1" value="2" class="explorer-slider">
     <div class="explorer-bars">
       <div class="bar-row"><span>Precision</span><div class="bar-track"><div class="bar-fill" id="ex-precision-bar"></div></div></div>
       <div class="bar-row"><span>Recall</span><div class="bar-track"><div class="bar-fill recall" id="ex-recall-bar"></div></div></div>
     </div>
-    <button id="ex-jump" type="button">Jump to cost-optimal (0.09)</button>
+    <button id="ex-jump" type="button">Jump to cost-optimal (0.02)</button>
   </div>
 </section>
 
@@ -224,11 +224,14 @@
   <h2>Cost-sensitive threshold optimization</h2>
   <p class="note">
     $500 per missed fraud, $5 per blocked legitimate transaction — illustrative, not sourced.
-    Threshold selected on validation, cost reported on the untouched test set.
+    Threshold selected on validation, cost reported on the untouched test set. These two figures
+    use a 101-point threshold grid rather than the exact search used for the production
+    threshold above — kept as the grid baseline on purpose, so it's directly comparable to the
+    exact-search result (0.02, 5.2% reduction) rather than silently updated to match it.
   </p>
   <div class="fig-row">
-    <figure class="fig"><img src="figures/cost_vs_threshold.png" alt="Cost vs threshold"><figcaption>Default (0.50): $6,575 · optimized (0.09): $6,415</figcaption></figure>
-    <figure class="fig"><img src="figures/cost_ratio_sensitivity.png" alt="Cost ratio sensitivity"><figcaption>Optimal threshold moves from 0.87 to 0.01 as the cost ratio sweeps 1→500</figcaption></figure>
+    <figure class="fig"><img src="figures/cost_vs_threshold.png" alt="Cost vs threshold"><figcaption>Default (0.50): $6,575 · grid-optimized (0.09): $6,415</figcaption></figure>
+    <figure class="fig"><img src="figures/cost_ratio_sensitivity.png" alt="Cost ratio sensitivity"><figcaption>Optimal threshold moves from 0.87 to 0.01 as the cost ratio sweeps 1→500 (grid)</figcaption></figure>
   </div>
 
   <p class="note">
@@ -255,18 +258,19 @@
 <section>
   <h2>Is any of it robust?</h2>
   <div class="fig-row">
-    <figure class="fig"><img src="figures/cost_uncertainty_threshold_distribution.png" alt="Cost uncertainty distribution"><figcaption>500 draws of cost_fn~U(100,1000), cost_fp~U(1,20) — median matches the point estimate, range is [0.01, 0.75]</figcaption></figure>
+    <figure class="fig"><img src="figures/cost_uncertainty_threshold_distribution.png" alt="Cost uncertainty distribution"><figcaption>500 draws of cost_fn~U(100,1000), cost_fp~U(1,20), exact search — median no longer matches the point estimate (0.09 vs. 0.02), range is [0.008, 0.773]</figcaption></figure>
   </div>
   <table>
     <tr><th>Check</th><th>Result</th></tr>
-    <tr><td>Walk-forward (4 time windows)</td><td>optimized threshold beat default in <strong>2 / 4</strong> folds; threshold itself swung 0.04 → 0.62</td></tr>
-    <tr><td>Bootstrap (1,000 resamples)</td><td>cost reduction 2.4%, 95% CI <strong class="neg">[−9.3%, 18.7%]</strong> — crosses zero</td></tr>
-    <tr><td>Cost-ratio uncertainty (500 draws)</td><td>median 0.09 matches the point estimate, but range is [0.01, 0.75]</td></tr>
+    <tr><td>Walk-forward (4 time windows, exact search)</td><td>optimized threshold improved cost in <strong>1 / 4</strong> folds, worsened <strong>3 / 4</strong> — worse than the old grid result (1 improved, 1 tied, 2 worsened); threshold swung 0.006 → 0.78</td></tr>
+    <tr><td>Bootstrap (1,000 resamples, exact search)</td><td>cost reduction 5.2%, 95% CI <strong class="neg">[−24.6%, 29.1%]</strong> — crosses zero, wider than the old grid-based CI despite the better point estimate</td></tr>
+    <tr><td>Cost-ratio uncertainty (500 draws, exact search)</td><td>median 0.09 — no longer matches the point estimate (0.02); range [0.008, 0.773]</td></tr>
   </table>
   <div class="verdict">
     Cost-sensitive threshold optimization has a positive expected effect here, but it is not a
-    reliably-winning intervention on a 492-fraud-row dataset. That's the honest read, not a
-    hedge.
+    reliably-winning intervention on a 492-fraud-row dataset. Switching to exact threshold search
+    made the point estimate better and the walk-forward stability <em>worse</em> at the same
+    time — both real, reported as such rather than picking the flattering half.
   </div>
 </section>
 
@@ -287,8 +291,8 @@
     <tr><th></th><th>Primary</th><th>Sparkov</th></tr>
     <tr><td>Baseline PR-AUC</td><td>0.757</td><td><strong>0.969</strong> (with per-card velocity feature)</td></tr>
     <tr><td>Class weighting</td><td class="pos">helps marginally</td><td class="neg">hurts (0.909 → 0.882)</td></tr>
-    <tr><td>Threshold optimization</td><td class="pos">+2.4% cost reduction</td><td class="neg">−1.8% (worse)</td></tr>
-    <tr><td>Walk-forward beats default</td><td>2 / 4 folds</td><td>1 / 4 folds</td></tr>
+    <tr><td>Threshold optimization</td><td class="pos">+5.2% cost reduction (exact search)</td><td class="neg">−1.8% (worse)</td></tr>
+    <tr><td>Walk-forward improved</td><td>1 / 4 folds</td><td>1 / 4 folds</td></tr>
   </table>
   <div class="verdict">
     Neither primary-dataset conclusion replicates — and the disagreement gets <em>stronger</em>
@@ -308,8 +312,8 @@
 
 <footer>
   Every number on this page came from actually running the scripts in the repo against the real
-  trained model — nothing here is illustrative or hand-picked. Full methodology, all five
-  robustness experiments, and the external-validation breakdown:
+  trained model — nothing here is illustrative or hand-picked. Full methodology, every
+  robustness experiment, and the external-validation breakdown:
   <a href="https://github.com/Charith-Reddy-Pareddy/Cost-Sensitive-Fraud-Detection-with-Threshold-Optimization/blob/main/RESEARCH_REPORT.md">RESEARCH_REPORT.md</a>.
 </footer>
 
