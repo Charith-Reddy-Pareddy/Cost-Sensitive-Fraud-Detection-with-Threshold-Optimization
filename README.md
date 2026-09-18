@@ -122,18 +122,25 @@ Every training run logs to MLflow (`mlflow ui --backend-store-uri sqlite:///mlfl
 Autoencoder trained on legitimate transactions only; fraud gets ~21x higher reconstruction error
 but PR-AUC still collapses, because reconstruction-anomalous and fraudulent only partly overlap.
 
-| Imbalance strategy | PR-AUC | F1 @ 0.5 | Cost-weighted training | Calibration |
+| Imbalance strategy | PR-AUC | F1 @ 0.5 | Cost-weighted training | Calibration (exact search) |
 |---|---|---|---|---|
-| None | 0.757 | **0.813** | standard @ 0.5: **$7,510** | raw: $6,415 |
-| Class weighting | 0.758 | 0.736 | cost-weighted @ 0.5: **$6,530** | Platt: $6,605 |
-| SMOTE | **0.760** | 0.611 | cost-weighted + tuned: $7,070 | **isotonic: $6,235** |
+| None | 0.757 | **0.813** | standard @ 0.5: **$7,510** | raw: $6,235 |
+| Class weighting | 0.758 | 0.736 | cost-weighted @ 0.5: **$6,530** | Platt: $6,235 |
+| SMOTE | **0.760** | 0.611 | cost-weighted + tuned: $7,070 | isotonic: $6,235 |
 
 PR-AUC barely moves across imbalance strategies (within noise) while F1@0.5 gets steadily worse
 — ranking and default-threshold precision aren't the same thing. Cost-weighted training beats
 both threshold-tuning alone *and* the two combined (training-time and decision-time
-cost-sensitivity partially substitute for each other, not add). Isotonic calibration wins on
-both Brier score and cost; Platt scaling improves Brier but still costs more. Full discussion:
-[`RESEARCH_REPORT.md`](RESEARCH_REPORT.md#experiments).
+cost-sensitivity partially substitute for each other, not add). **Under exact threshold search,
+raw, Platt, and isotonic-calibrated scores all reach the identical minimum cost ($6,235)** — a
+finding that only shows up once the threshold search is exact, not a grid: Platt scaling and
+isotonic regression are both monotonic (rank-preserving) transforms of the raw score, so they
+can never change *which* transactions get flagged at the cost-minimizing cutoff, only the numeric
+threshold value needed to flag them. Under the old 101-point grid, raw/Platt/isotonic reached
+different costs ($6,415/$6,605/$6,235) purely because a fixed set of numeric cutpoints lands at
+different rank-positions depending on how each calibration method redistributes probabilities —
+an artifact of the grid, not a real advantage of isotonic calibration for cost minimization. Full
+discussion: [`RESEARCH_REPORT.md §3b`](RESEARCH_REPORT.md#3b-does-calibration-still-matter-for-cost-minimization-under-exact-search).
 
 ### How the production model detects fraud
 
@@ -177,12 +184,15 @@ than double. The grid was a discretization choice, not a limit of the method; se
 [`RESEARCH_REPORT.md §1b`](RESEARCH_REPORT.md#1b-is-the-grid-itself-limiting-the-result) for the
 full comparison.
 
-**Migration in progress:** the production model, its bootstrap CI, walk-forward evaluation, and
-the cost-ratio uncertainty sweep (below) now use exact threshold search as of days 1–3 of an
-ongoing propagation; the *fixed*-ratio cost sensitivity sweep above (a different, separate sweep
-from the uncertainty one below), calibration analysis, the ablation study, and the
-training-objective comparison are still grid-based, pending later days of the same migration —
-flagged here rather than left implicit. See [`RESEARCH_REPORT.md` Future work](RESEARCH_REPORT.md#future-work).
+**Migration nearly complete:** as of day 4 of an ongoing propagation, the production model, its
+bootstrap CI, walk-forward evaluation, the cost-ratio uncertainty sweep, calibration analysis, the
+ablation study, and the training-objective comparison all now use exact threshold search. Only
+the *fixed*-ratio cost sensitivity sweep above (`run_cost_analysis.py`, a different, separate
+sweep from the uncertainty one below) is still grid-based, queued next. One finding from today
+worth flagging here: under exact search, raw/Platt/isotonic-calibrated scores all reach the
+*identical* minimum cost — the "isotonic calibration wins" result reported earlier in this README
+was an artifact of the 101-point grid, not a real calibration advantage; see
+[`RESEARCH_REPORT.md §3b`](RESEARCH_REPORT.md#3b-does-calibration-still-matter-for-cost-minimization-under-exact-search).
 
 ### Is any of this robust?
 

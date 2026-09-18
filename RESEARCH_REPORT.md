@@ -178,26 +178,69 @@ for both by chance. The wider lesson: the spread itself (0.008 to 0.773) still m
 different but still plausible cost assumption would pick a very different operating point, and if
 anything that conclusion is reinforced, not weakened, by exact search.
 
+#### 3b. Does calibration still matter for cost-minimization under exact search?
+
+Before this day's migration, [`run_calibration_analysis.py`](src/models/run_calibration_analysis.py)
+compared raw, Platt-scaled, and isotonic-calibrated scores and found isotonic calibration reached
+the lowest cost ($6,235) while raw ($6,415) and Platt ($6,605) did worse — read at the time as
+isotonic calibration being the better choice for cost minimization. Re-run with exact search:
+
+| Method | Brier (test) | Threshold (val, exact search) | Test cost |
+|---|---|---|---|
+| Raw | 0.00061 | 0.0197 | $6,235 |
+| Platt-scaled | 0.00047 | 0.0004 | $6,235 |
+| Isotonic-calibrated | 0.00043 | 0.0121 | $6,235 |
+
+**All three now reach the identical minimum cost.** This isn't a coincidence, and it isn't
+specific to this dataset — it follows from what Platt scaling and isotonic regression actually
+are: both are *monotonic* (rank-preserving) transforms of the raw score. Cost-minimization at a
+threshold only depends on *which* transactions end up flagged, which is entirely a function of
+score *rank order* — a monotonic recalibration can never change that ordering, only the numeric
+threshold value needed to reproduce it. An exact search, which checks every achievable rank-based
+cutoff, is therefore mathematically guaranteed to find the same minimum achievable cost regardless
+of which monotonic calibration (if any) was applied first. The old result — isotonic winning,
+Platt losing — was a property of the **101-point grid**, not of calibration: a fixed set of
+numeric cutpoints (0.00, 0.01, 0.02, …) lands at different rank-positions depending on how each
+calibration method stretches or compresses the probability scale, so the grid could reach a good
+cutoff for one calibration and a poor one for another, purely by where the fixed grid points
+happened to fall. [`run_ablation_study.py`](src/models/run_ablation_study.py) confirms this
+independently: its class-weighting + optimized-threshold row and its
+class-weighting + isotonic + optimized-threshold row both reach $6,235 under exact search, having
+differed under the grid.
+
+**This doesn't mean calibration is worthless — it means its value lies elsewhere.** Brier score
+still meaningfully differs (isotonic 0.00043 vs. raw 0.00061), which matters for anything that
+uses the probability *value* itself rather than just its rank: the amount-proportional cost
+model (Experiment 6), any expected-value ranking under capacity constraints (Experiment 6c), and
+simply reporting a probability a human will read as a probability. Cost-minimization under a
+flat per-class cost and exact search just isn't one of the places that value shows up.
+
 ### 4. Does training-time cost-sensitivity add anything over threshold tuning?
 
 Four configurations, same train/val/test protocol:
 
+Threshold selection now uses exact search (Day 4 of the propagation described in Future work —
+this table's numbers match `run_calibration_mechanism_study.py`'s §4b, which used exact search
+from the start, so this is a consistency update, not a new experiment):
+
 | Configuration | Threshold | PR-AUC | Recall | Expected cost |
 |---|---|---|---|---|
-| A: standard training, threshold 0.5 | 0.50 | 0.757 | 0.712 | $7,510 |
-| B: standard training, optimized threshold | 0.01 | 0.757 | 0.750 | $6,795 |
-| C: cost-weighted training, threshold 0.5 | 0.50 | 0.761 | 0.750 | $6,530 |
-| D: cost-weighted training, optimized threshold | 0.02 | 0.761 | 0.750 | $7,070 |
+| A: standard training, threshold 0.5 | 0.5000 | 0.757 | 0.712 | $7,510 |
+| B: standard training, optimized threshold | 0.0053 | 0.757 | 0.769 | $6,555 |
+| C: cost-weighted training, threshold 0.5 | 0.5000 | 0.761 | 0.750 | $6,530 |
+| D: cost-weighted training, optimized threshold | 0.0246 | 0.761 | 0.750 | $6,945 |
 
 "Cost-weighted training" here means the training sample weights are set directly to the dollar
 costs (`$500` per fraud row, `$5` per legitimate row) — a genuinely different mechanism from
 class weighting (which only encodes class *frequency*, not the actual dollar figures).
 
-**C beats both B and D.** Cost-weighted training alone, at the plain default threshold, does
-better than either decision-time threshold tuning alone or the two combined. Combining
-training-time and decision-time cost-sensitivity (D) is not simply additive — it's *worse* than
-cost-weighted training alone. The mechanism behind that — not just that it happens, but why — is
-investigated directly next. This is the most interesting single result in this report: two
+**C still beats both B and D under exact search** — unlike walk-forward (Experiment 2), where
+exact search flipped the result, this central finding holds up under the more rigorous threshold
+method: cost-weighted training alone, at the plain default threshold, does better than either
+decision-time threshold tuning alone or the two combined. Combining training-time and
+decision-time cost-sensitivity (D) is not simply additive — it's *worse* than cost-weighted
+training alone. The mechanism behind that — not just that it happens, but why — is investigated
+directly next. This is the most interesting single result in this report: two
 cost-sensitivity mechanisms that sound complementary in principle turn out to partially
 substitute for, rather than reinforce, each other in practice.
 
@@ -371,18 +414,31 @@ Same four configurations as Experiment 4, on Sparkov with the velocity feature
 
 | Configuration | Threshold | PR-AUC | Recall | Expected cost |
 |---|---|---|---|---|
-| A: standard training, threshold 0.5 | 0.50 | 0.969 | 0.887 | $64,205 |
-| B: standard training, optimized threshold | 0.02 | 0.969 | 0.977 | $18,305 |
-| **C: cost-weighted training, threshold 0.5** | **0.50** | **0.969** | 0.980 | **$16,230** |
-| D: cost-weighted training, optimized threshold | 0.38 | 0.969 | 0.982 | $16,495 |
+| A: standard training, threshold 0.5 | 0.5000 | 0.969 | 0.887 | $64,205 |
+| B: standard training, optimized threshold | 0.0097 | 0.969 | 0.983 | $18,630 |
+| **C: cost-weighted training, threshold 0.5** | **0.5000** | **0.969** | 0.980 | **$16,230** |
+| D: cost-weighted training, optimized threshold | 0.3808 | 0.969 | 0.982 | $16,465 |
 
 **Yes — C beats both B and D here too.** ("Standard training" here has no weighting at all, not
 even class weighting, so A's default threshold is badly miscalibrated — hence threshold tuning
-alone (B) recovering most of the cost. But the comparable claim, C vs. D, replicates exactly: the
+alone (B) recovering most of the cost. But the comparable claim, C vs. D, replicates: the
 cheapest configuration is cost-weighted training at the plain default threshold, not the version
 with a threshold additionally tuned on top of it.) Combined with Experiment 5a, every Sparkov
 robustness check now agrees with its primary-dataset counterpart in direction, even where the
 magnitudes differ substantially.
+
+**A real bug, found and fixed while re-running this for Day 4 (exact search).** An earlier
+refactor changed the Sparkov training pipeline from a `Pipeline` object to a bare `XGBClassifier`
+(removing an unneeded `StandardScaler` step), but this script's cost-weighted fit call still used
+the old Pipeline-addressing syntax (`classifier__sample_weight=`), which is invalid on a bare
+estimator and raised a `TypeError` immediately. That means **this table's B/C/D rows went
+unverified from that refactor's commit until today** — C's and A's numbers (the two
+threshold-0.5 rows, unaffected by the buggy fit call reaching that far) turned out to still match
+exactly, and B/D's minor shift (0.02→0.0097, 0.38→0.3808) is explained entirely by this being the
+first time this table used exact search rather than the grid, not by the bug. Fixed as a plain
+one-line change (`sample_weight=` instead of `classifier__sample_weight=`); the conclusion above
+is unchanged, but it's now actually re-verified rather than carried forward from before the
+refactor broke it.
 
 #### 5d. Is the Sparkov threshold also sensitive to cost-ratio uncertainty?
 
@@ -680,16 +736,17 @@ intervention** — its benefit is real on average but small relative to the nois
 - **In progress:** propagate exact threshold search (§1b) past the headline comparison to every
   number that currently uses the 101-point grid, so the whole report shares one consistent,
   un-discretized basis instead of a mix. Status: the production model, its bootstrap CI
-  (Statistical analysis, above), walk-forward evaluation (Experiment 2), and the cost-ratio
-  *uncertainty* sweep (Experiment 3 and §5d, the 500-draw Monte Carlo one) have switched to exact
-  search. Walk-forward's result changed materially (exact search *worsened* cross-fold stability,
-  the opposite of the bootstrap's improvement — a genuine, unresolved tension); the cost-ratio
-  uncertainty sweep's central tendency barely moved but its IQR tightened and shifted lower, and
-  it broke an apparent agreement with the §1b point estimate that turns out to have been
-  coincidental (§3). The *fixed*-ratio cost sensitivity sweep (`run_cost_analysis.py`'s
-  `cost_ratio_sensitivity_sweep`, a different function from the uncertainty sweep above),
-  calibration analysis, the ablation study, and the training-objective comparison are still
-  grid-based and queued next.
+  (Statistical analysis), walk-forward evaluation (Experiment 2), the cost-ratio *uncertainty*
+  sweep (Experiment 3 and §5d), calibration analysis (§3b), the ablation study, and the
+  training-objective comparison (Experiment 4 and §5c) have all switched to exact search.
+  Walk-forward's result changed materially (exact search *worsened* cross-fold stability, the
+  opposite of the bootstrap's improvement — a genuine, unresolved tension); the training-objective
+  finding (C beats D) held up unchanged on both datasets; and the calibration comparison revealed
+  that raw/Platt/isotonic all reach the *identical* cost-minimum under exact search — the old
+  "isotonic wins" result was an artifact of the grid, not a real calibration advantage (§3b). Only
+  the *fixed*-ratio cost sensitivity sweep (`run_cost_analysis.py`'s `cost_ratio_sensitivity_sweep`,
+  a different function from the uncertainty sweep above) remains grid-based, queued next — the
+  last piece of this migration.
 - Diagnose the LightGBM anomaly from §7 (PR-AUC ≈0.02-0.05 on this dataset vs. 0.82 for
   XGBoost under identical no-weighting conditions, not reproduced on synthetic data at a
   matched imbalance ratio) rather than leaving it excluded.
