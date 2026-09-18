@@ -747,6 +747,18 @@ intervention** — its benefit is real on average but small relative to the nois
   the *fixed*-ratio cost sensitivity sweep (`run_cost_analysis.py`'s `cost_ratio_sensitivity_sweep`,
   a different function from the uncertainty sweep above) remains grid-based, queued next — the
   last piece of this migration.
+- **A real bug, found and fixed while updating the dashboard for this migration (day 5):**
+  `docs/` (GitHub Pages) keeps its own copy of every figure it embeds, separate from
+  `reports/figures/` — regenerating a figure in `reports/figures/` (as the day-1 and day-3 work
+  above did, for `confusion_matrix.png` and `cost_uncertainty_threshold_distribution.png`) never
+  automatically updated the live dashboard's copy. The dashboard was silently showing the old
+  threshold-0.09 confusion matrix and the old grid-based cost-uncertainty distribution for four
+  days after the numbers around them had already changed. Fixed two ways: the two stale files were
+  re-copied, and a new `make dashboard` target now regenerates the exported JSON *and* re-syncs
+  every figure `docs/index.html` references in one step, so this can't silently recur. Verified in
+  a real browser against a local server, not just by diffing files — screenshots of every section
+  (headline stats, both interactive explorers, the robustness table, the Sparkov comparison)
+  confirmed against the regenerated data.
 - Diagnose the LightGBM anomaly from §7 (PR-AUC ≈0.02-0.05 on this dataset vs. 0.82 for
   XGBoost under identical no-weighting conditions, not reproduced on synthetic data at a
   matched imbalance ratio) rather than leaving it excluded.

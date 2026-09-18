@@ -379,6 +379,10 @@ run those with `python -m src.models.<name>`). `make manifest` regenerates
 [`results/manifest.json`](results/manifest.json): a checksum of the raw data and trained model
 artifacts, processed split sizes, package versions, fixed seeds, and the git commit — so any
 reported number can be traced back to exactly what produced it, not just trusted on faith.
+`make dashboard` regenerates the live dashboard's exported JSON and re-syncs every figure it
+embeds from `reports/figures/` — `docs/` keeps its own copy for GitHub Pages, and a figure
+regenerated elsewhere doesn't reach the live page without this step (a real staleness bug this
+caught and fixed, see `RESEARCH_REPORT.md` Future work).
 
 For re-running the cost-optimal threshold, cost-ratio sweep, or walk-forward experiments under
 different costs, hyperparameters, or datasets without editing code, there's a Hydra-configured
