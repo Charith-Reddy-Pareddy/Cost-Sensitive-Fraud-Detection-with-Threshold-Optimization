@@ -43,7 +43,7 @@ def main() -> None:
 
     pipeline_cost = _build_pipeline()
     weights = cost_sample_weights(y_train.to_numpy(), DEFAULT_COST_FALSE_NEGATIVE, DEFAULT_COST_FALSE_POSITIVE)
-    pipeline_cost.fit(X_train, y_train, classifier__sample_weight=weights)
+    pipeline_cost.fit(X_train, y_train, sample_weight=weights)
     val_proba_cost = pipeline_cost.predict_proba(X_val)[:, 1]
     test_proba_cost = pipeline_cost.predict_proba(X_test)[:, 1]
 
