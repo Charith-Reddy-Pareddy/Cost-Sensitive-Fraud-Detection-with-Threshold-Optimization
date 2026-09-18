@@ -23,7 +23,7 @@ from src.models.calibration import (
     fit_platt_scaling,
     reliability_curve,
 )
-from src.models.cost_engine import DEFAULT_COST_FALSE_NEGATIVE, DEFAULT_COST_FALSE_POSITIVE, expected_cost, optimize_threshold
+from src.models.cost_engine import DEFAULT_COST_FALSE_NEGATIVE, DEFAULT_COST_FALSE_POSITIVE, exact_optimal_threshold, expected_cost
 from src.models.imbalance_comparison import build_pipeline
 
 PROCESSED_DIR = Path(__file__).resolve().parents[2] / "data" / "processed"
@@ -70,9 +70,7 @@ def main() -> None:
         ]
         for name, val_proba, test_proba in methods:
             # threshold selected on val, cost reported on test
-            sweep = optimize_threshold(
-                y_val_arr, val_proba, cost_fn=DEFAULT_COST_FALSE_NEGATIVE, cost_fp=DEFAULT_COST_FALSE_POSITIVE
-            )
+            sweep = exact_optimal_threshold(y_val_arr, val_proba, DEFAULT_COST_FALSE_NEGATIVE, DEFAULT_COST_FALSE_POSITIVE)
             test_cost = expected_cost(
                 y_test_arr, test_proba, sweep.optimal_threshold, DEFAULT_COST_FALSE_NEGATIVE, DEFAULT_COST_FALSE_POSITIVE
             )
@@ -115,7 +113,7 @@ def main() -> None:
 
         print(f"{'method':10} {'brier':>10} {'threshold':>10} {'test cost':>12}")
         for name, r in results.items():
-            print(f"{name:10} {r['brier_score']:10.5f} {r['optimal_threshold']:10.3f} {r['test_cost']:12,.2f}")
+            print(f"{name:10} {r['brier_score']:10.5f} {r['optimal_threshold']:10.4f} {r['test_cost']:12,.2f}")
 
 
 if __name__ == "__main__":

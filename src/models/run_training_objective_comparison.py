@@ -17,7 +17,7 @@ from pathlib import Path
 import pandas as pd
 
 from src.features.pipeline import RAW_FEATURE_COLUMNS, TARGET_COLUMN
-from src.models.cost_engine import DEFAULT_COST_FALSE_NEGATIVE, DEFAULT_COST_FALSE_POSITIVE, expected_cost, optimize_threshold
+from src.models.cost_engine import DEFAULT_COST_FALSE_NEGATIVE, DEFAULT_COST_FALSE_POSITIVE, exact_optimal_threshold, expected_cost
 from src.models.cost_sensitive_training import cost_sample_weights
 from src.models.evaluation import evaluate_full
 from src.models.imbalance_comparison import build_pipeline
@@ -54,24 +54,22 @@ def main() -> None:
         cost = expected_cost(y_test_arr, test_proba, threshold, DEFAULT_COST_FALSE_NEGATIVE, DEFAULT_COST_FALSE_POSITIVE)
         return name, threshold, m["pr_auc"], m["recall"], cost
 
-    sweep_standard = optimize_threshold(
-        y_val_arr, val_proba_standard, cost_fn=DEFAULT_COST_FALSE_NEGATIVE, cost_fp=DEFAULT_COST_FALSE_POSITIVE
+    sweep_standard = exact_optimal_threshold(
+        y_val_arr, val_proba_standard, DEFAULT_COST_FALSE_NEGATIVE, DEFAULT_COST_FALSE_POSITIVE
     )
-    sweep_cost = optimize_threshold(
-        y_val_arr, val_proba_cost, cost_fn=DEFAULT_COST_FALSE_NEGATIVE, cost_fp=DEFAULT_COST_FALSE_POSITIVE
-    )
+    sweep_cost = exact_optimal_threshold(y_val_arr, val_proba_cost, DEFAULT_COST_FALSE_NEGATIVE, DEFAULT_COST_FALSE_POSITIVE)
 
     rows = [
         _row("A: standard training, threshold 0.5", val_proba_standard, test_proba_standard, 0.5),
         _row(
-            f"B: standard training, optimized threshold ({sweep_standard.optimal_threshold:.2f})",
+            f"B: standard training, optimized threshold ({sweep_standard.optimal_threshold:.4f})",
             val_proba_standard,
             test_proba_standard,
             sweep_standard.optimal_threshold,
         ),
         _row("C: cost-weighted training, threshold 0.5", val_proba_cost, test_proba_cost, 0.5),
         _row(
-            f"D: cost-weighted training, optimized threshold ({sweep_cost.optimal_threshold:.2f})",
+            f"D: cost-weighted training, optimized threshold ({sweep_cost.optimal_threshold:.4f})",
             val_proba_cost,
             test_proba_cost,
             sweep_cost.optimal_threshold,
@@ -81,7 +79,7 @@ def main() -> None:
     print("| Configuration | Threshold | PR-AUC | Recall | Expected cost |")
     print("|---|---|---|---|---|")
     for name, threshold, pr_auc, recall, cost in rows:
-        print(f"| {name} | {threshold:.2f} | {pr_auc:.3f} | {recall:.3f} | ${cost:,.2f} |")
+        print(f"| {name} | {threshold:.4f} | {pr_auc:.3f} | {recall:.3f} | ${cost:,.2f} |")
 
 
 if __name__ == "__main__":

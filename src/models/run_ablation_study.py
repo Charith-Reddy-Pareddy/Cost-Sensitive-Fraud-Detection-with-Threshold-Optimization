@@ -12,7 +12,7 @@ import pandas as pd
 
 from src.features.pipeline import RAW_FEATURE_COLUMNS, TARGET_COLUMN
 from src.models.calibration import apply_isotonic, fit_isotonic
-from src.models.cost_engine import DEFAULT_COST_FALSE_NEGATIVE, DEFAULT_COST_FALSE_POSITIVE, expected_cost, optimize_threshold
+from src.models.cost_engine import DEFAULT_COST_FALSE_NEGATIVE, DEFAULT_COST_FALSE_POSITIVE, exact_optimal_threshold, expected_cost
 from src.models.evaluation import evaluate_full
 from src.models.imbalance_comparison import build_pipeline
 
@@ -53,28 +53,26 @@ def main() -> None:
     rows.append(("class weighting + threshold 0.5", m["pr_auc"], cost))
 
     # 3: class weighting, cost-optimized threshold (selected on val)
-    sweep = optimize_threshold(y_val_arr, proba_cw_val, cost_fn=DEFAULT_COST_FALSE_NEGATIVE, cost_fp=DEFAULT_COST_FALSE_POSITIVE)
+    sweep = exact_optimal_threshold(y_val_arr, proba_cw_val, DEFAULT_COST_FALSE_NEGATIVE, DEFAULT_COST_FALSE_POSITIVE)
     m = evaluate_full(y_test_arr, proba_cw_test, threshold=sweep.optimal_threshold)
     test_cost = expected_cost(
         y_test_arr, proba_cw_test, sweep.optimal_threshold, DEFAULT_COST_FALSE_NEGATIVE, DEFAULT_COST_FALSE_POSITIVE
     )
-    rows.append((f"class weighting + optimized threshold ({sweep.optimal_threshold:.2f})", m["pr_auc"], test_cost))
+    rows.append((f"class weighting + optimized threshold ({sweep.optimal_threshold:.4f})", m["pr_auc"], test_cost))
 
     # 4: class weighting + isotonic calibration + optimized threshold (calibrator fit on val too)
     iso_model = fit_isotonic(proba_cw_val, y_val_arr)
     val_calibrated = apply_isotonic(iso_model, proba_cw_val)
     test_calibrated = apply_isotonic(iso_model, proba_cw_test)
 
-    sweep_calib = optimize_threshold(
-        y_val_arr, val_calibrated, cost_fn=DEFAULT_COST_FALSE_NEGATIVE, cost_fp=DEFAULT_COST_FALSE_POSITIVE
-    )
+    sweep_calib = exact_optimal_threshold(y_val_arr, val_calibrated, DEFAULT_COST_FALSE_NEGATIVE, DEFAULT_COST_FALSE_POSITIVE)
     m = evaluate_full(y_test_arr, test_calibrated, threshold=sweep_calib.optimal_threshold)
     test_cost_calib = expected_cost(
         y_test_arr, test_calibrated, sweep_calib.optimal_threshold, DEFAULT_COST_FALSE_NEGATIVE, DEFAULT_COST_FALSE_POSITIVE
     )
     rows.append(
         (
-            f"class weighting + isotonic calibration + optimized threshold ({sweep_calib.optimal_threshold:.2f})",
+            f"class weighting + isotonic calibration + optimized threshold ({sweep_calib.optimal_threshold:.4f})",
             m["pr_auc"],
             test_cost_calib,
         )
